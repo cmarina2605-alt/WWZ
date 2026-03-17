@@ -147,9 +147,8 @@ class GridCanvas(tk.Canvas):
         self.cell_size: float = size / config.GRID_SIZE
         self._rect_ids: Dict[Tuple[int, int], int] = {}
 
-        # Dibujar mapa estático (capas 1-6)
+        # Dibujar mapa estático (capas 1-5)
         self._draw_usa_background()
-        self._draw_great_lakes()
         self._draw_zones()
         self._draw_legend()
 
