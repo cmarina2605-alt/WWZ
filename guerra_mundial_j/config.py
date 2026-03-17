@@ -106,6 +106,24 @@ CANVAS_SIZE: int = 600        # Tamaño en píxeles del canvas del grid
 UI_REFRESH_MS: int = 100      # Milisegundos entre refrescos de la UI
 
 # ---------------------------------------------------------------------------
-# Estrategias disponibles para batch runs
+# Mecánica de alerta nacional / Casa Blanca
+# ---------------------------------------------------------------------------
+# La fórmula es: delay = max(MIN_ALERT_DELAY, BASE - K * num_en_panico)
+# Cuanta más gente en pánico haya cuando el político emite la alerta,
+# antes llega el mensaje a la Casa Blanca.
+WHITEHOUSE_DELAY_BASE: int = 150   # Ticks base hasta que llega el mensaje
+WHITEHOUSE_DELAY_K: float = 0.8    # Reducción de ticks por persona en pánico
+MIN_ALERT_DELAY: int = 25          # Mínimo de ticks de espera (siempre hay burocracia)
+
+# ---------------------------------------------------------------------------
+# Estrategias disponibles
 # ---------------------------------------------------------------------------
 STRATEGIES: list[str] = ["random", "flee", "group", "military_first"]
+
+# Descripciones narrativas de cada estrategia (para el EventLog)
+STRATEGY_DESCRIPTIONS: dict = {
+    "flee":           "🏃 Protocolo EVACUACIÓN — huid y dispersaos",
+    "group":          "👥 Protocolo AGRUPACIÓN — juntaos, la fuerza está en el grupo",
+    "military_first": "🎖 Protocolo OFENSIVA MILITAR — militares al frente, civiles a los refugios",
+    "random":         "❓ Protocolo... ninguno. El gobierno no se ha puesto de acuerdo",
+}

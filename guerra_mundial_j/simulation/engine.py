@@ -147,11 +147,17 @@ class Engine:
         )
         self._tick_thread.start()
 
-        # Thread de conversión de infectados (bug crítico: antes nunca se llamaba)
+        # Thread de conversión de infectados
         self._infection_thread = threading.Thread(
             target=self._infection_monitor_loop, daemon=True, name="InfectionMonitor"
         )
         self._infection_thread.start()
+
+        # Thread de la mecánica Casa Blanca: espera alerta → elige estrategia
+        self._strategy_thread = threading.Thread(
+            target=self._strategy_monitor_loop, daemon=True, name="StrategyMonitor"
+        )
+        self._strategy_thread.start()
 
     def pause(self) -> None:
         """
@@ -187,6 +193,7 @@ class Engine:
         self.result = None
         self.start_time = None
         self.end_time = None
+        self.strategy = "none"
 
         game_over.clear()
         antidote_ready.clear()
@@ -273,6 +280,80 @@ class Engine:
             time.sleep(config.TICK_SPEED)
             self.tick += 1
             self.world.tick = self.tick
+
+    def _strategy_monitor_loop(self) -> None:
+        """
+        Implementa la mecánica 'mensaje a la Casa Blanca'.
+
+        Flujo:
+          1. Espera a que un Político active national_alert.
+          2. Cuenta cuántas personas están en pánico (running) → más pánico,
+             mensaje más rápido (la noticia se esparce sola).
+          3. Espera delay_ticks antes de que la Casa Blanca 'responda'.
+          4. Elige la estrategia según la influencia del político más poderoso.
+          5. Escribe world.strategy para que todos los agentes la lean.
+        """
+        national_alert.wait()
+        if game_over.is_set():
+            return
+
+        # Cuánta gente en pánico cuando llega la alerta
+        num_alerted = sum(1 for a in self.agents if getattr(a, "state", "") == "running")
+        delay_ticks = max(
+            config.MIN_ALERT_DELAY,
+            int(config.WHITEHOUSE_DELAY_BASE - config.WHITEHOUSE_DELAY_K * num_alerted),
+        )
+
+        self.world.push_event(
+            "alert",
+            f"📨 Mensaje en camino a Casa Blanca "
+            f"({num_alerted} testigos) — llegará en ~{delay_ticks} ticks",
+        )
+
+        # Esperar los ticks de retardo
+        start_tick = self.tick
+        while self.tick - start_tick < delay_ticks and not game_over.is_set():
+            time.sleep(0.2)
+            self._pause_event.wait()
+
+        if game_over.is_set():
+            return
+
+        # Elegir estrategia y activarla
+        chosen = self._choose_strategy()
+        self.strategy = chosen
+        self.world.strategy = chosen
+
+        self.world.push_event("strategy", f"🏛 Casa Blanca ha respondido")
+        self.world.push_event("strategy", config.STRATEGY_DESCRIPTIONS.get(chosen, chosen))
+
+    def _choose_strategy(self) -> str:
+        """
+        Elige la estrategia según la influencia del Político más poderoso.
+
+        Escala de influencia (0-100):
+            ≥ 85 → military_first  (gobierno fuerte, respuesta militar)
+            ≥ 65 → flee            (evacuación organizada)
+            ≥ 45 → group           (protección civil, agrupación)
+            <  45 → random         (gobierno débil, nadie se pone de acuerdo)
+        """
+        politicians = [
+            a for a in self.agents
+            if isinstance(a, Politician) and a.is_alive()
+        ]
+        if not politicians:
+            return "flee"
+
+        max_influence = max(p.influence for p in politicians)
+
+        if max_influence >= 85:
+            return "military_first"
+        elif max_influence >= 65:
+            return "flee"
+        elif max_influence >= 45:
+            return "group"
+        else:
+            return "random"
 
     def _infection_monitor_loop(self) -> None:
         """

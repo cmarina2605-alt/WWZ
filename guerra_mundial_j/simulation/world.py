@@ -63,6 +63,9 @@ class World:
         self.tick: int = 0
         self._event_queue: List[Dict[str, Any]] = []
         self._event_lock: threading.Lock = threading.Lock()
+        # Estrategia activa: "none" hasta que la Casa Blanca responda
+        # Todos los agentes la leen desde aquí para modular su comportamiento
+        self.strategy: str = "none"
 
     # ------------------------------------------------------------------
     # Operaciones sobre el grid

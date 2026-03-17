@@ -307,16 +307,27 @@ class Military(Human):
 
         Si la fuerza supera el umbral, busca activamente zombis para
         combatir en lugar de huir.
+
+        Con estrategia "military_first": radio de visión ampliado (VISION_ZOMBIE)
+        y umbral de fuerza reducido a 30, para que casi todos los militares luchen.
         """
         from simulation import movement, combat
 
         if not self.is_alive():
             return
 
-        nearby = self.world.get_agents_in_radius(self.pos, config.VISION_HUMAN)
+        strategy = getattr(self.world, "strategy", "none")
+        if strategy == "military_first":
+            vision = config.VISION_ZOMBIE
+            force_threshold = 30
+        else:
+            vision = config.VISION_HUMAN
+            force_threshold = config.FORCE_FLEE_THRESHOLD
+
+        nearby = self.world.get_agents_in_radius(self.pos, vision)
         zombies_nearby = [a for a in nearby if a.__class__.__name__ == "Zombie"]
 
-        if zombies_nearby and self.force > config.FORCE_FLEE_THRESHOLD:
+        if zombies_nearby and self.force > force_threshold:
             # Comportamiento agresivo: acercarse al zombi más cercano
             self.set_state("fighting")
             closest = min(zombies_nearby, key=lambda z: self.distance_to(z.pos))
