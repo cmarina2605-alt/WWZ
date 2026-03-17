@@ -320,40 +320,41 @@ class Engine:
             return
 
         # Elegir estrategia y activarla
-        chosen = self._choose_strategy()
+        chosen, winner = self._choose_strategy()
         self.strategy = chosen
         self.world.strategy = chosen
 
-        self.world.push_event("strategy", f"🏛 Casa Blanca ha respondido")
+        if winner:
+            ideology_name = winner.IDEOLOGY_NAMES.get(winner.ideology, winner.ideology)
+            self.world.push_event(
+                "strategy",
+                f"🏛 Casa Blanca responde: {ideology_name} (influencia {winner.influence}) impone su agenda",
+            )
+        else:
+            self.world.push_event("strategy", "🏛 Casa Blanca ha respondido (sin políticos vivos)")
         self.world.push_event("strategy", config.STRATEGY_DESCRIPTIONS.get(chosen, chosen))
 
-    def _choose_strategy(self) -> str:
+    def _choose_strategy(self):
         """
-        Elige la estrategia según la influencia del Político más poderoso.
+        Elige la estrategia según la ideología del Político más influyente.
 
-        Escala de influencia (0-100):
-            ≥ 85 → military_first  (gobierno fuerte, respuesta militar)
-            ≥ 65 → flee            (evacuación organizada)
-            ≥ 45 → group           (protección civil, agrupación)
-            <  45 → random         (gobierno débil, nadie se pone de acuerdo)
+        Cada político tiene una ideología fija que mapea directamente a una
+        estrategia. Gana el que tenga mayor influence y esté vivo.
+        Si no hay políticos, se usa "flee" por defecto.
+
+        Returns:
+            Tupla (strategy_str, winning_politician_or_None).
         """
         politicians = [
             a for a in self.agents
             if isinstance(a, Politician) and a.is_alive()
         ]
         if not politicians:
-            return "flee"
+            return "flee", None
 
-        max_influence = max(p.influence for p in politicians)
-
-        if max_influence >= 85:
-            return "military_first"
-        elif max_influence >= 65:
-            return "flee"
-        elif max_influence >= 45:
-            return "group"
-        else:
-            return "random"
+        winner = max(politicians, key=lambda p: p.influence)
+        chosen = winner.IDEOLOGY_STRATEGIES.get(winner.ideology, "flee")
+        return chosen, winner
 
     def _infection_monitor_loop(self) -> None:
         """

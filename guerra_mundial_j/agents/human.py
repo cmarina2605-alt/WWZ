@@ -377,23 +377,43 @@ class Politician(Human):
 
     ALERT_COOLDOWN_TICKS: int = 50
 
+    # Ideologías disponibles y la estrategia que cada una propone
+    IDEOLOGY_STRATEGIES: dict = {
+        "hawk":      "military_first",  # El Halcón: respuesta militar total
+        "populist":  "flee",            # El Populista: evacuar al pueblo primero
+        "socialist": "group",           # El Socialista: fuerza en la unión
+        "chaotic":   "random",          # El Indeciso: el gobierno no se pone de acuerdo
+    }
+
+    IDEOLOGY_NAMES: dict = {
+        "hawk":      "El Halcón",
+        "populist":  "El Populista",
+        "socialist": "El Socialista",
+        "chaotic":   "El Indeciso",
+    }
+
     def __init__(
         self,
         pos: Tuple[int, int],
         world: "World",
         influence: int = 80,
+        ideology: Optional[str] = None,
         **kwargs,
     ) -> None:
         """
-        Inicializa un Politician con alta empatía e influencia.
+        Inicializa un Politician con alta empatía, influencia e ideología.
 
         Args:
-            influence: Nivel de influencia política (0-100).
+            influence: Nivel de influencia política (0-100). Determina quién
+                gana el debate cuando hay varios políticos vivos.
+            ideology: Una de "hawk", "populist", "socialist", "chaotic".
+                Si es None, se asigna aleatoriamente.
         """
         empathy = kwargs.pop("empathy", 80)
         super().__init__(pos=pos, world=world, empathy=empathy, **kwargs)
         self.role = "politician"
         self.influence: int = max(0, min(100, influence))
+        self.ideology: str = ideology if ideology in self.IDEOLOGY_STRATEGIES else random.choice(list(self.IDEOLOGY_STRATEGIES))
         self.alert_cooldown: int = 0
         self._alert_messages: list[str] = [
             "📨 Mensaje llega a Casa Blanca",
