@@ -83,6 +83,7 @@ class Engine:
         random.seed(self.seed)
 
         self.strategy: str = strategy
+        self.phase: str = "🧟 Brote"   # Fase narrativa actual de la simulación
         self.n_humans_initial: int = n_humans
         self.n_zombies_initial: int = n_zombies
         self.p_infect: float = p_infect
@@ -194,6 +195,7 @@ class Engine:
         self.start_time = None
         self.end_time = None
         self.strategy = "none"
+        self.phase = "🧟 Brote"
 
         game_over.clear()
         antidote_ready.clear()
@@ -304,10 +306,11 @@ class Engine:
             int(config.WHITEHOUSE_DELAY_BASE - config.WHITEHOUSE_DELAY_K * num_alerted),
         )
 
+        self.phase = "📨 Alerta enviada"
         self.world.push_event(
             "alert",
             f"📨 Mensaje en camino a Casa Blanca "
-            f"({num_alerted} testigos) — llegará en ~{delay_ticks} ticks",
+            f"({num_alerted} en pánico) — llegará en ~{delay_ticks} ticks",
         )
 
         # Esperar los ticks de retardo
@@ -326,11 +329,13 @@ class Engine:
 
         if winner:
             ideology_name = winner.IDEOLOGY_NAMES.get(winner.ideology, winner.ideology)
+            self.phase = f"⚙ {ideology_name}"
             self.world.push_event(
                 "strategy",
                 f"🏛 Casa Blanca responde: {ideology_name} (influencia {winner.influence}) impone su agenda",
             )
         else:
+            self.phase = "⚙ Protocolo activado"
             self.world.push_event("strategy", "🏛 Casa Blanca ha respondido (sin políticos vivos)")
         self.world.push_event("strategy", config.STRATEGY_DESCRIPTIONS.get(chosen, chosen))
 
@@ -415,17 +420,28 @@ class Engine:
 
         Condiciones:
         - Humanos ganan: no quedan zombis.
-        - Zombis ganan: no quedan humanos vivos (ni infectados).
+        - Zombis ganan: no quedan humanos vivos NI infectados
+          (todos han muerto o convertido).
         - Antídoto: antidote_ready activo → humanos ganan.
+
+        Los infectados cuentan como humanos todavía vivos hasta que
+        se conviertan; esto evita declarar derrota durante la incubación.
         """
         counts = self.world.count_agents_by_type()
         self.n_zombies = counts.get("Zombie", 0)
+
+        # Humanos vivos = sanos + infectados (aún no convertidos)
         living_humans = sum(
+            1 for a in self.agents
+            if a.__class__.__name__ != "Zombie" and a.is_alive()
+            and a.state != "dead"
+        )
+        # Para el contador de la UI mostramos solo los no infectados
+        self.n_humans = sum(
             1 for a in self.agents
             if a.__class__.__name__ != "Zombie" and a.is_alive()
             and a.state not in ("infected", "dead")
         )
-        self.n_humans = living_humans
 
         if antidote_ready.is_set():
             self.result = "humans_win"
@@ -526,6 +542,7 @@ class Engine:
             "running": self.running,
             "paused": self.paused,
             "strategy": self.strategy,
+            "phase": self.phase,
             "seed": self.seed,
             "grid": self.world.get_state_snapshot(),
         }

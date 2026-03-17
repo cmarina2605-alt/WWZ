@@ -155,12 +155,21 @@ class App(tk.Tk):
             "¡LISTO!" if antidote_pct >= 100
             else f"{antidote_pct}%"
         )
+        strategy = snapshot.get("strategy", "none")
+        strategy_labels = {
+            "none":           "—",
+            "flee":           "EVACUACIÓN",
+            "group":          "AGRUPACIÓN",
+            "military_first": "OFENSIVA MILITAR",
+            "random":         "SIN PROTOCOLO",
+        }
         self.stats_panel.update({
             "n_humans": snapshot["n_humans"],
             "n_zombies": snapshot["n_zombies"],
             "infected": snapshot.get("infected", 0),
             "tick": snapshot["tick"],
-            "strategy": snapshot["strategy"],
+            "phase": snapshot.get("phase", "🧟 Brote"),
+            "strategy": strategy_labels.get(strategy, strategy),
             "antidote": antidote_str,
             "result": snapshot["result"] or "En curso",
         })

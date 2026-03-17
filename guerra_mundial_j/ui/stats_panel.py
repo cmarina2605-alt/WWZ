@@ -47,7 +47,8 @@ class StatsPanel(tk.Frame):
         ("n_zombies", "🧟 Zombis",        "#ffff00"),
         ("infected",  "🟠 Infectados",    "#ffa500"),
         ("tick",      "⏱  Tick",          "#87ceeb"),
-        ("strategy",  "⚙  Estrategia",    "#da70d6"),
+        ("phase",     "📍 Fase",           "#ff9944"),
+        ("strategy",  "⚙  Protocolo",     "#da70d6"),
         ("antidote",  "💉 Antídoto",      "#00cfff"),
         ("result",    "🏁 Estado",         "#ffffff"),
     ]

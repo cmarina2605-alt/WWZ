@@ -55,7 +55,7 @@ LAKE_COLOR: str = "#1a4a6b"         # Grandes Lagos
 # ---------------------------------------------------------------------------
 # Parámetros de probabilidad
 # ---------------------------------------------------------------------------
-P_INFECT: float = 0.4         # Probabilidad de infección en encuentro
+P_INFECT: float = 0.15        # Probabilidad de infección en encuentro
 P_KILL_ZOMBIE: float = 0.2    # Probabilidad de que un humano mate al zombi
 P_ESCAPE: float = 0.3         # Probabilidad base de escapar
 
@@ -71,7 +71,7 @@ VISION_ZOMBIE: int = 15       # Radio de visión de un zombi
 TICK_SPEED: float = 0.1       # Segundos entre ticks de cada agente (base)
 WIN_CHECK_INTERVAL: float = 1.0   # Segundos entre comprobaciones de victoria
 ANTIDOTE_TICKS: int = 500     # Ticks necesarios para que un Scientist complete antídoto
-INFECTION_DELAY_TICKS: int = 25   # Ticks de incubación antes de que un infectado se convierta
+INFECTION_DELAY_TICKS: int = 50   # Ticks de incubación antes de que un infectado se convierta
 
 # ---------------------------------------------------------------------------
 # Colores de la UI (Tkinter color strings)
@@ -111,9 +111,9 @@ UI_REFRESH_MS: int = 100      # Milisegundos entre refrescos de la UI
 # La fórmula es: delay = max(MIN_ALERT_DELAY, BASE - K * num_en_panico)
 # Cuanta más gente en pánico haya cuando el político emite la alerta,
 # antes llega el mensaje a la Casa Blanca.
-WHITEHOUSE_DELAY_BASE: int = 150   # Ticks base hasta que llega el mensaje
-WHITEHOUSE_DELAY_K: float = 0.8    # Reducción de ticks por persona en pánico
-MIN_ALERT_DELAY: int = 25          # Mínimo de ticks de espera (siempre hay burocracia)
+WHITEHOUSE_DELAY_BASE: int = 60    # Ticks base hasta que llega el mensaje
+WHITEHOUSE_DELAY_K: float = 0.5    # Reducción de ticks por persona en pánico
+MIN_ALERT_DELAY: int = 10          # Mínimo de ticks de espera (siempre hay burocracia)
 
 # ---------------------------------------------------------------------------
 # Estrategias disponibles
