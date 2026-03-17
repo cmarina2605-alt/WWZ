@@ -237,12 +237,12 @@ class GridCanvas(tk.Canvas):
         row_h = 13
         pad = 4
 
-        # Fondo semitransparente
+        # Fondo semi-opaco (stipple simula transparencia; Tkinter no admite alpha en hex)
         total_h = len(self.LEGEND) * row_h + pad * 2
         self.create_rectangle(
             x0 - pad, y0 - pad,
             x0 + 70, y0 + total_h - pad,
-            fill="#00000088", outline="", stipple="gray50",
+            fill="#000000", outline="", stipple="gray50",
         )
 
         y = y0
