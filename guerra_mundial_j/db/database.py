@@ -1,8 +1,28 @@
 """
 database.py — Capa de acceso a datos SQLite para la simulación.
 
-La clase Database encapsula todas las operaciones de lectura/escritura
-sobre la base de datos simulations.db.
+La clase Database es un wrapper thread-safe sobre sqlite3 que encapsula
+todas las operaciones CRUD sobre simulations.db. Todos los métodos
+adquieren un threading.Lock interno antes de acceder a la conexión,
+por lo que puede llamarse desde múltiples threads sin riesgo de corrupción.
+
+Métodos de escritura:
+    save_simulation(data)           — inserta una simulación, retorna su ID.
+    save_event(sim_id, type, tick, desc) — añade un evento a una simulación.
+    update_simulation_result(...)   — actualiza resultado, duración y conteos
+                                      finales cuando la simulación termina.
+
+Métodos de lectura:
+    get_all_simulations()           — todas las simulaciones, más reciente primero.
+    load_simulation(seed)           — simulación más reciente con ese seed.
+    get_events(sim_id)              — eventos de una simulación, ordenados por tick.
+    get_simulation_count()          — número total de simulaciones en la DB.
+
+Uso típico:
+    db = Database()           # abre/crea simulations.db
+    sim_id = db.save_simulation({...})
+    db.save_event(sim_id, "antidote", tick=420, description="...")
+    db.close()
 """
 
 import sqlite3

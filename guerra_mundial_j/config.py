@@ -1,8 +1,24 @@
 """
 config.py — Constantes globales de la simulación Guerra Mundial J.
 
-Todas las constantes de configuración están centralizadas aquí para
-facilitar el ajuste de parámetros sin tocar lógica de negocio.
+Este fichero centraliza TODOS los parámetros configurables de la
+simulación. Cualquier ajuste de comportamiento (velocidad, probabilidades,
+tamaño del mundo, colores de la UI) se hace aquí, sin tocar la lógica
+de los agentes ni del motor.
+
+Secciones:
+    - Dimensiones del mundo: tamaño del grid 2D.
+    - Población inicial: número de humanos por rol y zombis al arrancar.
+    - Localizaciones clave: posiciones fijas de LAB, Casa Blanca y base militar.
+    - Parámetros de probabilidad: infección, huida, matar zombi.
+    - Visión: radios de detección para humanos y zombis.
+    - Tiempos: velocidad base de tick, intervalos de comprobación,
+      ticks para el antídoto y período de incubación de infectados.
+    - Colores UI: strings de color Tkinter por tipo de agente.
+    - Parámetros de combate: bonus militar, umbrales de fuerza y edad.
+    - Base de datos: ruta del fichero SQLite.
+    - UI: dimensiones de ventana y frecuencia de refresco.
+    - Estrategias: lista de estrategias disponibles para runs batch.
 """
 
 # ---------------------------------------------------------------------------

@@ -1,11 +1,23 @@
 """
 test_agents.py — Tests unitarios para agentes (Human y Zombie).
 
-Cubre:
-    - Instanciación correcta de Human y Zombie.
-    - Respeto de game_over en el bucle run().
-    - Herencia y atributos de Military, Scientist y Politician.
-    - Transiciones de estado válidas.
+Verifica que las clases de agentes se comportan correctamente de forma
+aislada, sin necesidad de levantar una simulación completa.
+
+Suites de tests:
+    TestAgentInstantiation  — los agentes se crean con los atributos correctos,
+                              IDs únicos y fuerza clampeada a [0, 100].
+    TestGameOverRespect     — el thread del agente se detiene cuando game_over
+                              se activa, y no arranca si ya estaba activo.
+    TestMilitaryAttributes  — bonus de fuerza, consumo de munición y rol.
+    TestScientistAttributes — inteligencia, antidote_progress inicial y rol.
+    TestPoliticianAttributes — influencia, empatía alta por defecto y rol.
+    TestStateTransitions    — estados válidos se asignan; estados inválidos
+                              lanzan ValueError; infect() y die() funcionan.
+
+Los tests usan Worlds de tamaño 20×20 para ser rápidos y las señales
+globales (game_over, antidote_ready, national_alert) se limpian en setUp
+y se activan en tearDown para no dejar threads huérfanos entre tests.
 """
 
 import threading

@@ -1,8 +1,22 @@
 """
 stats_panel.py — Panel de estadísticas en tiempo real.
 
-Muestra contadores de humanos, zombis, infectados, tick actual
-y estrategia activa, actualizándose cada ciclo de UI.
+Muestra en tiempo real los indicadores clave de la simulación,
+refrescándose cada UI_REFRESH_MS milisegundos desde app.py.
+
+Estadísticas mostradas:
+    🧍 Humanos    — número de humanos vivos (verde).
+    🧟 Zombis     — número de zombis activos (amarillo).
+    🟠 Infectados — humanos en período de incubación (naranja).
+    ⏱  Tick       — tick global de la simulación (azul clarito).
+    ⚙  Estrategia — estrategia humana activa: flee/group/military_first/random.
+    💉 Antídoto   — progreso del científico más avanzado en el lab (0%–¡LISTO!).
+    🏁 Estado     — resultado: "En curso", "humans_win" o "zombies_win".
+
+Implementación:
+    Cada fila es un par (Label estático, Label con tk.StringVar).
+    update(stats_dict) actualiza las StringVars con los valores recibidos.
+    reset() pone todos los valores a "—" (usado tras Reset de simulación).
 """
 
 import tkinter as tk

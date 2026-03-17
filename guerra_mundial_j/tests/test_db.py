@@ -1,14 +1,25 @@
 """
 test_db.py — Tests de la capa de base de datos.
 
-Usa ":memory:" para no tocar el fichero simulations.db.
+Usa ":memory:" (SQLite en RAM) para que los tests sean rápidos, aislados
+y no contaminen ni dependan del fichero simulations.db en disco.
 
-Cubre:
-    - save_simulation() y recuperación por seed.
-    - save_event() y relación con sim_id.
-    - update_simulation_result().
-    - Consultas de estadísticas (analyze_strategies, sensitivity_analysis).
-    - Cierre y reapertura de conexión.
+Suites de tests:
+    TestSaveAndLoadSimulation   — save_simulation() retorna ID > 0; los datos
+                                  se recuperan intactos por seed; load_simulation
+                                  retorna None para seeds inexistentes; el conteo
+                                  de simulaciones es correcto.
+    TestSaveAndLoadEvents       — save_event() inserta sin errores; get_events()
+                                  retorna los eventos del sim_id correcto ordenados
+                                  por tick; los eventos de distintas simulaciones
+                                  no se mezclan.
+    TestUpdateSimulationResult  — update_simulation_result() actualiza result,
+                                  duration, humans_final y zombies_final correctamente.
+    TestStatsQueries            — analyze_strategies() retorna win rates por estrategia;
+                                  sensitivity_analysis('p_infect') retorna buckets;
+                                  parámetros inválidos lanzan ValueError;
+                                  get_best_strategy() retorna la estrategia ganadora
+                                  o None si la DB está vacía.
 """
 
 import unittest

@@ -1,8 +1,28 @@
 """
 engine.py — Motor principal de la simulación Guerra Mundial J.
 
-Engine crea todos los agentes, lanza sus threads y supervisa
-las condiciones de victoria en un thread separado.
+Engine es el orquestador central: crea el mundo, genera todos los agentes,
+los coloca en el grid, lanza sus threads y gestiona el ciclo de vida
+completo de la simulación.
+
+Threads que gestiona:
+    - Un thread por agente (humano o zombi) → lógica autónoma en Agent.run().
+    - WinChecker   → comprueba condiciones de victoria cada WIN_CHECK_INTERVAL s.
+    - TickCounter  → incrementa world.tick a la velocidad base de la simulación.
+    - InfectionMonitor → detecta infectados y los convierte en zombis tras
+                         INFECTION_DELAY_TICKS ticks de incubación.
+
+Condiciones de victoria:
+    Humanos ganan si: no quedan zombis, o antidote_ready está activo.
+    Zombis ganan si:  no quedan humanos vivos.
+
+Controles en tiempo real:
+    pause() / resume() — suspenden/reanudan el loop de agentes.
+    reset()            — detiene todo y limpia el estado para reiniciar.
+    stop()             — señaliza game_over y espera que los threads terminen.
+
+El Engine también expone get_snapshot() para que la UI acceda al estado
+actual sin race conditions, y get_stats() para guardar resultados en la DB.
 """
 
 import threading

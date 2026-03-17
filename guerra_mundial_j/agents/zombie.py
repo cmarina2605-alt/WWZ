@@ -1,9 +1,22 @@
 """
 zombie.py — Clase Zombie para la simulación Guerra Mundial J.
 
-Los zombis son agentes predatorios que persiguen al humano más cercano
-dentro de su rango de visión. Si no detectan ninguno, realizan un
-random walk.
+En el universo de la simulación, los zombis son copias del Profe José:
+resultado del experimento fallido que desató el apocalipsis.
+
+Comportamiento por tick:
+    1. El hambre (hunger) aumenta cada tick; a más hambre, más velocidad.
+    2. Busca el humano vivo más cercano dentro de VISION_ZOMBIE celdas.
+    3. Si lo encuentra, lo persigue (move_towards) y ataca al contacto
+       (distancia ≤ 1.5): delega en combat.resolve_encounter().
+    4. Si no hay humano visible, hace random walk.
+
+Sistema de targeting:
+    - Guarda target_id para mantener el objetivo entre ticks.
+    - Si el objetivo desaparece (muerto, huido o fuera de rango), retargetea.
+
+La conversión de humanos infectados NO ocurre aquí; la gestiona el
+InfectionMonitor del Engine para evitar race conditions al crear nuevos threads.
 """
 
 import random

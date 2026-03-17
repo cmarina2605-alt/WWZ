@@ -1,8 +1,29 @@
 """
 app.py — Ventana principal de la aplicación Tkinter.
 
-App es el root window que contiene el GridCanvas a la izquierda
-y el panel derecho con ControlPanel, EventLog y StatsPanel.
+App es el Tk root window que orquesta todos los widgets visuales
+y actúa de puente entre la UI y el Engine de simulación.
+
+Layout:
+    ┌─────────────────────────┬───────────────────────┐
+    │      GridCanvas         │  ControlPanel         │
+    │      (600×600 px)       │  StatsPanel           │
+    │                         │  EventLog             │
+    └─────────────────────────┴───────────────────────┘
+
+Loop de UI (cada UI_REFRESH_MS = 100 ms):
+    1. engine.get_snapshot() → obtiene el estado actual de forma thread-safe.
+    2. grid_canvas.render()  → pinta los agentes en el grid.
+    3. stats_panel.update()  → refresca contadores (humanos, zombis,
+       infectados, progreso del antídoto, tick, estrategia, resultado).
+    4. world.pop_events()    → consume y muestra eventos nuevos en el EventLog.
+
+Acciones del usuario (llamadas desde ControlPanel):
+    action_start()     — inicia la simulación si no está en marcha.
+    action_pause()     — pausa / reanuda.
+    action_reset()     — reinicia el mundo y la UI.
+    action_run_batch() — lanza N simulaciones headless en un thread daemon
+                         y guarda los resultados en la base de datos.
 """
 
 import tkinter as tk

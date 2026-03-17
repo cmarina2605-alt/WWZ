@@ -1,8 +1,23 @@
 """
 models.py — Definición del esquema de base de datos SQLite.
 
-Contiene las sentencias SQL para crear todas las tablas necesarias,
-así como constantes con los nombres de las tablas.
+Centraliza todas las sentencias SQL del proyecto en un único lugar:
+CREATE TABLE, CREATE INDEX, INSERT y SELECT. Así database.py no
+contiene SQL inline y los cambios de esquema se hacen aquí.
+
+Tabla `simulations` — una fila por ejecución de simulación:
+    id, seed, p_infect, vision_human, vision_zombie, strategy,
+    n_scientists, n_military, n_politicians, result, duration,
+    humans_final, zombies_final, tick_final, timestamp.
+
+Tabla `events` — eventos clave ocurridos durante una simulación:
+    id, sim_id (FK → simulations), event_type, tick, description.
+    Tipos: 'infection' | 'death' | 'escape' | 'zombie_death' |
+           'antidote' | 'alert' | 'outbreak'.
+
+Queries de análisis incluidas:
+    SELECT_WIN_RATE_BY_STRATEGY  — win rate agrupado por estrategia.
+    SELECT_SENSITIVITY_P_INFECT  — win rate agrupado por buckets de p_infect.
 """
 
 # ---------------------------------------------------------------------------

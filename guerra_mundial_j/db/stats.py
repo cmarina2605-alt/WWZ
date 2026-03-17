@@ -1,8 +1,31 @@
 """
 stats.py — Análisis estadístico de los resultados de simulaciones.
 
-Funciones para analizar estrategias, sensibilidad de parámetros
-y mostrar resúmenes en consola para runs en modo batch.
+Funciones de alto nivel que consultan la base de datos para extraer
+conclusiones sobre qué configuraciones favorecen a humanos o zombis.
+
+Funciones principales:
+    analyze_strategies(db)
+        → Dict {strategy: {total, human_wins, win_rate_pct}}
+        Responde: ¿qué estrategia humana tiene mayor tasa de victoria?
+
+    sensitivity_analysis(param, db)
+        → List [{value, total, win_rate_pct}]
+        Responde: ¿cómo varía el resultado al cambiar p_infect o la visión?
+        Parámetros soportados: "p_infect", "vision_zombie", "vision_human".
+
+    print_summary(db)
+        Imprime en consola un resumen formateado tras un run en modo batch.
+        Muestra: estrategias ordenadas por win_rate, sensibilidad a p_infect.
+
+    get_best_strategy(db)
+        → str | None  — nombre de la estrategia con mayor win_rate_pct.
+
+    get_recent_simulations(limit, db)
+        → List[Dict]  — las N simulaciones más recientes de la base de datos.
+
+Todas las funciones aceptan db=None y crean una instancia con la ruta
+por defecto si no se proporciona, para facilitar el uso desde la CLI.
 """
 
 from typing import Dict, List, Any, Optional

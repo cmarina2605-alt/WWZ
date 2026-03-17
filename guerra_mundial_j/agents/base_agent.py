@@ -1,8 +1,24 @@
 """
 base_agent.py — Clase abstracta base para todos los agentes de la simulación.
 
-Cada agente es un threading.Thread cuyo bucle de vida está en run().
-Las subclases deben implementar update() y get_color().
+Define el ciclo de vida común de cualquier entidad del mundo (humano o zombi):
+arrancar el thread, ejecutar update() cada move_delay segundos y detenerse
+cuando game_over se activa o el agente muere.
+
+Responsabilidades de esta clase:
+    - Generación de IDs únicos y thread-safe para cada agente.
+    - Bucle run(): llama a update(), duerme move_delay y repite.
+    - Cálculo de move_delay en función de edad y fuerza:
+        más edad → más lento; más fuerza → más rápido.
+    - Estados válidos: calm | running | fighting | infected | dead.
+    - Señales globales (threading.Event) accesibles desde cualquier módulo:
+        · game_over      — detiene todos los agentes.
+        · antidote_ready — los científicos han completado el antídoto.
+        · national_alert — el político ha emitido alerta de emergencia.
+
+Las subclases deben implementar:
+    update()    — lógica de decisión por tick (movimiento, combate...).
+    get_color() — color de representación en la UI Tkinter.
 """
 
 import threading

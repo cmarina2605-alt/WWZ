@@ -1,8 +1,28 @@
 """
 grid_canvas.py — Canvas Tkinter que dibuja el grid de la simulación.
 
-GridCanvas renderiza el estado del mundo como una cuadrícula de
-rectángulos coloreados según el tipo y estado de cada agente.
+GridCanvas renderiza el estado del mundo (snapshot del Engine) como una
+cuadrícula de rectángulos coloreados según el tipo y estado de cada agente.
+
+Colores de agentes:
+    Rojo    — Normal (ciudadano corriente)
+    Verde   — Military
+    Morado  — Scientist
+    Azul    — Politician
+    Amarillo — Zombie (todos son José)
+    Naranja — Infectado (en período de incubación)
+    Gris    — Muerto (desaparece pronto del grid)
+
+Elementos decorativos fijos (se dibujan una sola vez al init):
+    - Líneas de cuadrícula (solo si cell_size ≥ 4 px).
+    - Leyenda de colores en la esquina superior izquierda.
+    - Marcadores de zonas clave: LAB (cian), C.B. / Casa Blanca (blanco),
+      BASE militar (verde), mostrados como círculos punteados con etiqueta.
+
+Optimización de renderizado:
+    - Reutiliza los IDs de rectángulos de Tkinter (itemconfig) en lugar de
+      recrearlos cada frame, lo que reduce el overhead gráfico.
+    - Las celdas que ya no tienen agente se limpian con _clear_cell().
 """
 
 import tkinter as tk

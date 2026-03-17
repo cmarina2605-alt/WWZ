@@ -1,11 +1,25 @@
 """
 test_engine.py — Tests del motor de simulación (Engine y World).
 
-Cubre:
-    - Engine crea el número correcto de threads.
-    - World.lock evita race conditions.
-    - check_win_conditions() detecta fin de partida.
-    - Snapshots thread-safe.
+Verifica el comportamiento del Engine como orquestador y la
+thread-safety del World bajo acceso concurrente.
+
+Suites de tests:
+    TestEngineCreation          — el Engine crea el número correcto de agentes
+                                  y threads; todos son daemon; la semilla produce
+                                  resultados deterministas (reproducibilidad).
+    TestWorldLockRaceConditions — múltiples threads moviendo agentes no crashean
+                                  ni corrompen el grid; el lock impide que dos
+                                  agentes ocupen la misma celda; get_agents_in_radius
+                                  es segura bajo escritura concurrente.
+    TestWinConditions           — check_win_conditions() detecta correctamente:
+                                  zombies_win (sin humanos), humans_win (sin zombis),
+                                  humans_win (antidote_ready activo), None (ambos vivos).
+    TestEngineSnapshot          — get_snapshot() contiene todas las claves requeridas
+                                  y el campo 'grid' es un dict.
+
+Nota: cada test limpia game_over en setUp y lo activa en tearDown para
+detener threads residuales y evitar interferencias entre suites.
 """
 
 import threading

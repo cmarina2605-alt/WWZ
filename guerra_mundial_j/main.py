@@ -1,16 +1,33 @@
 """
 main.py — Punto de entrada de la simulación Guerra Mundial J.
 
-Soporta dos modos de ejecución:
-    - UI (por defecto): Lanza la interfaz gráfica Tkinter.
-    - Batch (--no-ui):  Ejecuta N simulaciones y guarda resultados en DB.
+Este fichero es el único que debe ejecutarse directamente. Parsea los
+argumentos de línea de comandos y lanza uno de los dos modos:
 
-Uso:
-    python main.py                          # UI interactiva
-    python main.py --no-ui                  # Una simulación sin UI
-    python main.py --no-ui --batch 100      # 100 simulaciones batch
-    python main.py --seed 42                # Semilla fija con UI
-    python main.py --no-ui --seed 42 --batch 10
+Modo UI (por defecto):
+    Lanza la interfaz gráfica Tkinter. El usuario puede iniciar, pausar
+    y reiniciar la simulación, ajustar parámetros con sliders y observar
+    el grid en tiempo real junto al log de eventos y las estadísticas.
+
+Modo Batch (--no-ui):
+    Ejecuta N simulaciones sin interfaz gráfica y guarda los resultados
+    en simulations.db para análisis posterior con --stats.
+
+Argumentos disponibles:
+    --no-ui              Modo headless (sin ventana Tkinter).
+    --seed INT           Semilla aleatoria para reproducibilidad.
+    --batch INT          Número de simulaciones en modo batch (default: 1).
+    --strategy STR       Estrategia humana: flee | group | military_first | random.
+    --p-infect FLOAT     Probabilidad de infección en encuentros (0.0–1.0).
+    --humans INT         Número de humanos al inicio de la simulación.
+    --stats              Muestra resumen estadístico de la DB y sale.
+
+Ejemplos:
+    python main.py
+    python main.py --no-ui --batch 50
+    python main.py --seed 12345
+    python main.py --no-ui --seed 42 --strategy military_first
+    python main.py --stats
 """
 
 import argparse

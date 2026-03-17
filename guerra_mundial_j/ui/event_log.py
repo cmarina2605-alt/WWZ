@@ -1,8 +1,26 @@
 """
 event_log.py — Widget de log de eventos de la simulación.
 
-EventLog muestra mensajes en tiempo real con timestamp,
-permitiendo hacer scroll para ver el historial.
+EventLog es un panel de texto con scroll que muestra en tiempo real
+todos los eventos significativos que ocurren durante la simulación,
+con timestamp y colores diferenciados por tipo de evento.
+
+Fuentes de eventos:
+    - world.pop_events() en el loop de UI → infecciones, muertes, escapes,
+      alertas nacionales, creación del antídoto, eventos del brote (José).
+    - app.py directamente → eventos de control (start, pause, reset, batch).
+
+Colores por tipo:
+    Rojo clarito  — muertes (💀 murió, dead)
+    Naranja       — infecciones (🧟 infectado)
+    Verde clarito — antídoto completado (💉)
+    Azul clarito  — alertas nacionales (📨 Casa Blanca)
+    Verde pálido  — escapes (🏃)
+    Gris          — eventos de sistema (start, pause, reset)
+    Blanco/gris   — cualquier otro evento
+
+Los mensajes más recientes aparecen arriba (insert en posición 1.0).
+Se mantiene un máximo de max_lines=200 entradas para no saturar la memoria.
 """
 
 import tkinter as tk

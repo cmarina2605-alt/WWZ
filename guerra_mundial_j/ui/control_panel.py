@@ -1,8 +1,24 @@
 """
 control_panel.py — Panel de controles de la simulación.
 
-Contiene botones de Start/Pause/Reset/Batch y sliders para ajustar
-parámetros en tiempo real.
+Proporciona al usuario los controles interactivos para manejar la
+simulación sin tener que editar código ni reiniciar el programa.
+
+Botones:
+    ▶ Start      — arranca la simulación (deshabilitado mientras corre).
+    ⏸ Pause      — pausa / reanuda; el texto cambia a "Resume" cuando pausado.
+    🔄 Reset      — detiene y reinicia todo desde cero.
+    ⚙ Batch×100  — lanza 100 simulaciones headless en background y guarda
+                   resultados en la DB para análisis posterior.
+
+Sliders (ajuste en tiempo real):
+    Velocidad     — modifica config.TICK_SPEED (0.01 – 0.5 s/tick).
+    P(infección)  — modifica config.P_INFECT y engine.p_infect (0.0 – 1.0).
+    N. Humanos    — modifica config.NUM_HUMANS para la próxima simulación.
+    Visión Zombi  — modifica config.VISION_ZOMBIE (5 – 30 celdas).
+
+Nota: los cambios de Velocidad, P(infección) y Visión Zombi tienen efecto
+inmediato. N. Humanos solo aplica al hacer Reset + Start.
 """
 
 import tkinter as tk

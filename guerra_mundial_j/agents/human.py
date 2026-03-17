@@ -1,15 +1,26 @@
 """
 human.py — Clases de agentes humanos de la simulación.
 
-Jerarquía:
-    Human (Agent)
-    ├── Normal
-    ├── Scientist
-    ├── Military
-    └── Politician
+Implementa la jerarquía de humanos que pueblan el grid:
 
-Cada subclase tiene atributos y comportamientos diferenciados que
-influyen en combate, movimiento y eventos especiales.
+    Human (Agent)   — base: tiene miedo (fear) y empatía (empathy).
+    ├── Normal       — ciudadano sin habilidades especiales; huye de zombis.
+    ├── Scientist    — navega activamente hacia el laboratorio (LAB_POS) para
+    │                  trabajar en el antídoto; huye si detecta zombis cerca.
+    ├── Military     — si fuerza > FORCE_FLEE_THRESHOLD, persigue zombis en
+    │                  lugar de huir; usa munición para aumentar prob. de matar.
+    └── Politician   — emite alertas nacionales (national_alert) al ver zombis,
+                       lo que acelera la respuesta de los militares.
+
+Mecánicas clave:
+    - Miedo (fear): aumenta al ver zombis, disminuye con el tiempo.
+      Un miedo alto activa el estado "running" y puede penalizar atributos.
+    - Pánico social (panic_spread): si ≥4 vecinos están corriendo, el agente
+      entra en pánico aunque no vea zombis directamente.
+    - Infección: Human.infect() marca el estado como "infected"; la conversión
+      real a Zombie la gestiona el InfectionMonitor del Engine.
+    - Antídoto: cuando un Scientist acumula suficientes ticks en el lab,
+      activa antidote_ready y empuja un evento al EventLog.
 """
 
 import random

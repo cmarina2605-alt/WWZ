@@ -1,8 +1,37 @@
 """
 movement.py — Lógica de movimiento para agentes de la simulación.
 
-Funciones de cálculo de posición para humanos (huida) y zombis
-(persecución o random walk), más propagación del pánico.
+Módulo de funciones puras (sin estado propio) que calculan la siguiente
+posición de cada agente en función de su tipo y el estado del mundo.
+
+Funciones principales:
+    calculate_next_pos(agent, world)
+        Dispatcher: llama a _human_next_pos o _zombie_next_pos según el tipo.
+
+    _human_next_pos(human, world)
+        Si hay zombis visibles, calcula el vector de huida opuesto al más
+        cercano y añade ruido aleatorio para movimiento no determinista.
+        Si no hay amenaza, hace random walk.
+
+    _zombie_next_pos(zombie, world)
+        Si tiene target_id guardado y lo localiza en el radio de visión,
+        se mueve hacia él. Si no, random walk.
+
+    move_towards(src, dst, world)
+        Un paso normalizado de src hacia dst (usado por Military y Zombie).
+
+    random_walk(pos, world, step=1)
+        Desplazamiento aleatorio de hasta `step` celdas en cada eje.
+
+    panic_spread(agent, world)
+        Si ≥4 vecinos en radio 3 están en estado "running", el agente
+        entra en pánico aunque no vea zombis (contagio social).
+
+Utilidades internas:
+    _flee_vector   — vector normalizado de huida opuesto a la amenaza.
+    _dist          — distancia euclidiana entre dos puntos.
+    _clamp         — mantiene coordenadas dentro de [0, size-1].
+    _resolve_collision — busca celda libre si la destino está ocupada.
 """
 
 import random

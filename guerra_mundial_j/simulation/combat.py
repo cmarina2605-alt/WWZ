@@ -1,8 +1,26 @@
 """
 combat.py — Resolución de encuentros entre humanos y zombis.
 
-La función principal resolve_encounter() determina el resultado de
-un encuentro basándose en fuerza, edad, rol y aleatoriedad.
+Cuando un humano y un zombi se encuentran en la misma celda o adyacentes,
+este módulo calcula probabilísticamente el resultado del enfrentamiento.
+
+Resultados posibles (Outcome):
+    "escape"         — el humano logra huir (set_state "running").
+    "human_infected" — el humano se infecta (human.infect()); el Engine
+                       lo convertirá en zombi tras el período de incubación.
+    "human_dies"     — el humano muere directamente (human.die()).
+    "zombie_dies"    — el zombi es eliminado (zombie.die()).
+
+Factores que influyen en las probabilidades:
+    - force_ratio (humano / zombi): más fuerza relativa → más fácil escapar.
+    - age: si el humano supera AGE_PENALTY_THRESHOLD, aumenta p_infect.
+    - role: Military con munición suma +0.3 a p_zombie_dies; los no-militares
+      tienen p_zombie_dies reducida.
+    - Aleatoriedad base: el resultado siempre tiene componente aleatorio para
+      que la simulación sea impredecible.
+
+Todos los efectos (morir, infectar, huir) se aplican directamente sobre
+los agentes, y se pushea un evento descriptivo al EventLog del world.
 """
 
 import random

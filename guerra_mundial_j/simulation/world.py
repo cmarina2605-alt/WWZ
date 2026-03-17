@@ -1,9 +1,27 @@
 """
 world.py — Representación del mundo compartido entre todos los agentes.
 
-El grid es un diccionario {(x, y): Agent} protegido por un
-threading.Lock global. Todas las operaciones de lectura/escritura
-sobre el grid deben adquirir este lock.
+El World es el único estado global de la simulación. Todos los agentes
+(que corren en threads distintos) acceden al grid a través de esta clase,
+que garantiza la consistencia mediante un threading.Lock.
+
+Estructura interna:
+    grid: Dict[(x,y), Agent] — mapa de posición a agente; una celda,
+          un agente. El lock protege todas las operaciones sobre él.
+    tick: int — contador global de ticks, incrementado por el Engine.
+    _event_queue: List[dict] — cola de eventos (infecciones, muertes,
+          alertas...) consumida por la UI y potencialmente por la DB.
+
+API principal:
+    place_agent(agent, pos)          — coloca un agente (falla si hay otro).
+    move_agent(agent, new_pos)       — mueve atómicamente (falla si ocupado).
+    remove_agent(agent)              — elimina del grid (al morir).
+    get_agents_in_radius(pos, r)     — lista de agentes en un radio dado.
+    get_state_snapshot()             — copia thread-safe para renderizar la UI.
+    push_event / pop_events          — cola de eventos para el EventLog y la DB.
+
+Nota de diseño: los métodos adquieren el lock internamente, por lo que los
+llamadores externos NO necesitan hacerlo salvo para operaciones compuestas.
 """
 
 import threading
