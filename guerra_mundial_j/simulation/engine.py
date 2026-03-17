@@ -238,9 +238,14 @@ class Engine:
             self.agents.append(agent)
             self.n_humans += 1
 
-        # Crear zombis
-        for _ in range(self.n_zombies_initial):
-            pos = self.world.find_free_cell()
+        # Crear zombis — el primero siempre es José y nace en San Diego
+        for i in range(self.n_zombies_initial):
+            if i == 0:
+                # José aparece en San Diego (o en una celda libre cercana)
+                outbreak = config.OUTBREAK_POS
+                pos = outbreak if self.world.is_cell_free(outbreak) else self.world.find_free_cell()
+            else:
+                pos = self.world.find_free_cell()
             if pos is None:
                 break
             zombie = Zombie(

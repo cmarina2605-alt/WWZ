@@ -36,12 +36,21 @@ NUM_MILITARY: int = 10        # Subconjunto de humanos tipo Military
 NUM_POLITICIANS: int = 2      # Subconjunto de humanos tipo Politician
 
 # ---------------------------------------------------------------------------
-# Localizaciones clave del mapa (x, y)
+# Localizaciones clave del mapa de EEUU (x=oeste-este, y=norte-sur, grid 0-99)
 # ---------------------------------------------------------------------------
-LAB_POS: tuple = (80, 80)          # Base científica (esquina inferior-derecha)
-LAB_RADIUS: int = 3                # Radio de detección de la base en celdas
-WHITEHOUSE_POS: tuple = (90, 10)   # Casa Blanca (arriba-derecha)
-MILITARY_BASE_POS: tuple = (10, 90) # Base militar (abajo-izquierda)
+OUTBREAK_POS: tuple = (5, 74)       # San Diego, CA — origen del brote (José)
+LAB_POS: tuple = (68, 62)           # CDC Atlanta, GA — base científica
+LAB_RADIUS: int = 3                 # Radio de detección del laboratorio (celdas)
+WHITEHOUSE_POS: tuple = (80, 40)    # Washington D.C. — Casa Blanca
+MILITARY_BASE_POS: tuple = (76, 55) # Fort Bragg, NC — base militar
+
+# ---------------------------------------------------------------------------
+# Colores del mapa geográfico (UI)
+# ---------------------------------------------------------------------------
+OCEAN_COLOR: str = "#0a2040"        # Fondo océano
+LAND_COLOR: str = "#2d5a27"         # Territorio continental
+LAND_BORDER_COLOR: str = "#4a8a42"  # Contorno y fronteras estatales
+LAKE_COLOR: str = "#1a4a6b"         # Grandes Lagos
 
 # ---------------------------------------------------------------------------
 # Parámetros de probabilidad

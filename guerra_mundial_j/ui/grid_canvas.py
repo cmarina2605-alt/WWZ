@@ -1,28 +1,33 @@
 """
-grid_canvas.py — Canvas Tkinter que dibuja el grid de la simulación.
+grid_canvas.py — Canvas Tkinter que dibuja el mapa de EE.UU. de la simulación.
 
-GridCanvas renderiza el estado del mundo (snapshot del Engine) como una
-cuadrícula de rectángulos coloreados según el tipo y estado de cada agente.
+GridCanvas renderiza el estado del mundo sobre un mapa geográfico aproximado
+de los Estados Unidos continentales. El mapa se dibuja una sola vez al iniciar
+(océano, territorio, estados, Grandes Lagos, ciudades clave) y los agentes
+se superponen frame a frame como rectángulos de color.
+
+Capas de renderizado (de abajo a arriba):
+    1. Fondo océano (bg OCEAN_COLOR).
+    2. Polígono continental de EE.UU. (LAND_COLOR).
+    3. Líneas de divisiones estatales (STATE_LINE_COLOR, punteadas).
+    4. Grandes Lagos (LAKE_COLOR).
+    5. Marcadores de ciudades clave (San Diego, Washington D.C., Atlanta, Fort Bragg).
+    6. Leyenda de colores de agentes (esquina superior izquierda).
+    7. Rectángulos de agentes — se actualizan cada frame sin recrear los layers inferiores.
 
 Colores de agentes:
-    Rojo    — Normal (ciudadano corriente)
-    Verde   — Military
-    Morado  — Scientist
-    Azul    — Politician
-    Amarillo — Zombie (todos son José)
-    Naranja — Infectado (en período de incubación)
-    Gris    — Muerto (desaparece pronto del grid)
+    Rojo     — Normal
+    Verde    — Military
+    Morado   — Scientist
+    Azul     — Politician
+    Amarillo — Zombie (¡todos son José!)
+    Naranja  — Infectado (incubación)
+    Gris     — Muerto
 
-Elementos decorativos fijos (se dibujan una sola vez al init):
-    - Líneas de cuadrícula (solo si cell_size ≥ 4 px).
-    - Leyenda de colores en la esquina superior izquierda.
-    - Marcadores de zonas clave: LAB (cian), C.B. / Casa Blanca (blanco),
-      BASE militar (verde), mostrados como círculos punteados con etiqueta.
-
-Optimización de renderizado:
-    - Reutiliza los IDs de rectángulos de Tkinter (itemconfig) en lugar de
-      recrearlos cada frame, lo que reduce el overhead gráfico.
-    - Las celdas que ya no tienen agente se limpian con _clear_cell().
+Optimización:
+    Los rectángulos de agentes se reutilizan entre frames (itemconfig en lugar
+    de delete+create). Al limpiar una celda, el rectángulo se elimina del todo
+    para que el mapa subyacente quede visible.
 """
 
 import tkinter as tk
@@ -33,22 +38,26 @@ import config
 
 class GridCanvas(tk.Canvas):
     """
-    Canvas que visualiza el grid de agentes de la simulación.
-
-    Cada celda del grid se representa como un rectángulo cuyo color
-    indica el tipo y estado del agente que la ocupa. Las celdas
-    vacías se muestran con el color de fondo.
-
-    El tamaño de cada celda se calcula automáticamente para que el
-    grid completo encaje en el canvas.
+    Canvas que visualiza el grid de agentes sobre un mapa de EE.UU.
 
     Attributes:
-        canvas_size (int): Tamaño en píxeles del canvas (cuadrado).
-        cell_size (float): Tamaño en píxeles de cada celda.
-        _rect_ids (Dict): Cache de IDs de rectángulos para reusar.
+        canvas_size (int): Tamaño en píxeles del canvas cuadrado.
+        cell_size (float): Tamaño en píxeles de cada celda del grid.
+        _rect_ids (Dict): Cache de IDs de rectángulos de agentes para reusar.
     """
 
-    # Leyenda de colores (label, color)
+    # ------------------------------------------------------------------
+    # Constantes de colores del mapa
+    # ------------------------------------------------------------------
+    OCEAN_COLOR      = "#0a2040"
+    LAND_COLOR       = "#2d5a27"
+    LAND_BORDER_COLOR = "#4a8a42"
+    STATE_LINE_COLOR = "#3a7a35"
+    LAKE_COLOR       = "#1a4a6b"
+
+    # ------------------------------------------------------------------
+    # Leyenda de agentes
+    # ------------------------------------------------------------------
     LEGEND = [
         ("Normal",     config.COLOR_NORMAL),
         ("Militar",    config.COLOR_MILITARY),
@@ -58,9 +67,70 @@ class GridCanvas(tk.Canvas):
         ("Infectado",  config.COLOR_INFECTED),
     ]
 
+    # ------------------------------------------------------------------
+    # Geometría del mapa
+    # ------------------------------------------------------------------
+
+    # Contorno aproximado de los EE.UU. continentales
+    # (coords de grid 0-99; x=oeste→este, y=norte→sur)
+    USA_POLYGON = [
+        # Costa noroeste (Washington) → frontera norte
+        (3, 8), (8, 5), (15, 3), (25, 2), (38, 2), (50, 2), (62, 2),
+        # Frontera norte → noreste (Maine)
+        (72, 2), (82, 3), (88, 5), (92, 8), (93, 11), (93, 16), (92, 20),
+        # Costa este hacia el sur
+        (91, 24), (92, 28), (91, 32), (90, 36), (89, 40), (90, 44),
+        (88, 48), (86, 52), (84, 56), (82, 60), (81, 63),
+        # Península de Florida
+        (80, 67), (78, 72), (76, 78), (74, 84), (72, 90), (70, 95),
+        (71, 97), (73, 96), (75, 92), (75, 87), (76, 83),
+        # Costa del Golfo de México (FL → TX)
+        (75, 80), (73, 82), (70, 83), (66, 83), (62, 84),
+        (58, 84), (54, 85), (50, 86), (46, 87), (42, 90),
+        # Frontera Texas / México
+        (40, 90), (38, 88), (35, 83), (32, 78), (28, 73), (24, 71),
+        # Frontera suroeste (US–México)
+        (20, 74), (16, 77), (12, 78), (8, 78), (5, 78), (3, 78),
+        # Costa Pacífica hacia el norte
+        (2, 72), (2, 62), (2, 52), (2, 42), (2, 32), (2, 22), (2, 15), (3, 8),
+    ]
+
+    # Líneas aproximadas de divisiones estatales (trazos punteados)
+    STATE_REGION_LINES = [
+        # Frontera oriental de los estados del Pacífico (CA / NV-AZ)
+        [(15, 3), (14, 20), (14, 40), (14, 60), (14, 78)],
+        # Frontera oriental de los estados Montañosos (CO / Grandes Llanuras)
+        [(35, 2), (34, 20), (33, 40), (33, 60), (35, 83)],
+        # Río Misisipi / divisoria central
+        [(56, 2), (55, 20), (55, 40), (55, 60), (54, 85)],
+        # Frontera de los estados del Este
+        [(80, 5), (80, 20), (80, 40), (80, 60), (80, 64)],
+    ]
+
+    # Grandes Lagos (cx, cy, rx, ry) en coords de grid
+    GREAT_LAKES = [
+        (58, 17, 8, 4),  # Lake Superior
+        (63, 27, 4, 8),  # Lake Michigan
+        (70, 23, 6, 5),  # Lake Huron
+        (75, 29, 5, 3),  # Lake Erie
+        (80, 26, 4, 3),  # Lake Ontario
+    ]
+
+    # Ciudades / zonas clave: (config_pos, label_línea1, label_línea2, color)
+    CITY_MARKERS = [
+        ("OUTBREAK_POS",      "San Diego",      "🧪 Brote",       "#ff4444"),
+        ("WHITEHOUSE_POS",    "Washington D.C.", "🏛 Casa Blanca", "#ffffff"),
+        ("LAB_POS",           "Atlanta, GA",    "💉 CDC",          "#00cfff"),
+        ("MILITARY_BASE_POS", "Fort Bragg, NC", "🎖 Base Militar", "#00ff88"),
+    ]
+
+    # ------------------------------------------------------------------
+    # Constructor
+    # ------------------------------------------------------------------
+
     def __init__(self, parent: tk.Widget, size: int = config.CANVAS_SIZE) -> None:
         """
-        Inicializa el canvas con fondo oscuro.
+        Inicializa el canvas con fondo océano y dibuja el mapa base.
 
         Args:
             parent: Widget padre de Tkinter.
@@ -70,77 +140,123 @@ class GridCanvas(tk.Canvas):
             parent,
             width=size,
             height=size,
-            bg=config.COLOR_EMPTY,
+            bg=self.OCEAN_COLOR,
             highlightthickness=0,
         )
         self.canvas_size: int = size
         self.cell_size: float = size / config.GRID_SIZE
         self._rect_ids: Dict[Tuple[int, int], int] = {}
-        self._draw_grid_lines()
-        self._draw_legend()
+
+        # Dibujar mapa estático (capas 1-6)
+        self._draw_usa_background()
+        self._draw_great_lakes()
         self._draw_zones()
+        self._draw_legend()
 
     # ------------------------------------------------------------------
-    # Inicialización visual
+    # Mapa estático
     # ------------------------------------------------------------------
 
-    def _draw_grid_lines(self) -> None:
-        """
-        Dibuja las líneas de la cuadrícula como referencia visual.
+    def _draw_usa_background(self) -> None:
+        """Dibuja el polígono continental de EE.UU. y las divisiones estatales."""
+        cs = self.cell_size
 
-        Solo dibuja líneas si la celda es suficientemente grande
-        (≥ 4 píxeles) para no saturar visualmente.
-        """
-        if self.cell_size < 4:
-            return
+        # Polígono continental
+        pts = []
+        for gx, gy in self.USA_POLYGON:
+            pts.extend([gx * cs, gy * cs])
+        self.create_polygon(
+            pts,
+            fill=self.LAND_COLOR,
+            outline=self.LAND_BORDER_COLOR,
+            width=1.5,
+        )
 
-        for i in range(config.GRID_SIZE + 1):
-            coord = i * self.cell_size
-            # Líneas verticales
-            self.create_line(coord, 0, coord, self.canvas_size, fill="#2a2a3e", width=0.5)
-            # Líneas horizontales
-            self.create_line(0, coord, self.canvas_size, coord, fill="#2a2a3e", width=0.5)
+        # Líneas de divisiones estatales (punteadas)
+        for line in self.STATE_REGION_LINES:
+            pts = []
+            for gx, gy in line:
+                pts.extend([gx * cs, gy * cs])
+            self.create_line(
+                pts,
+                fill=self.STATE_LINE_COLOR,
+                width=0.8,
+                dash=(4, 3),
+            )
 
-    # ------------------------------------------------------------------
-    # Inicialización visual: leyenda y zonas clave
-    # ------------------------------------------------------------------
+    def _draw_great_lakes(self) -> None:
+        """Dibuja los Grandes Lagos como óvalos azules."""
+        cs = self.cell_size
+        for cx, cy, rx, ry in self.GREAT_LAKES:
+            self.create_oval(
+                (cx - rx) * cs, (cy - ry) * cs,
+                (cx + rx) * cs, (cy + ry) * cs,
+                fill=self.LAKE_COLOR,
+                outline="#2a6a9b",
+                width=0.5,
+            )
+
+    def _draw_zones(self) -> None:
+        """Dibuja los marcadores de ciudades clave con nombre y emoji."""
+        cs = self.cell_size
+        r = config.LAB_RADIUS * cs
+
+        for attr, line1, line2, color in self.CITY_MARKERS:
+            gx, gy = getattr(config, attr)
+            px, py = gx * cs, gy * cs
+
+            # Círculo punteado
+            self.create_oval(
+                px - r, py - r, px + r, py + r,
+                outline=color, fill="", width=1.5, dash=(3, 3),
+            )
+            # Punto central
+            self.create_oval(
+                px - 2, py - 2, px + 2, py + 2,
+                fill=color, outline="",
+            )
+            # Etiqueta: ciudad arriba, emoji/rol abajo
+            self.create_text(
+                px, py - r - 10,
+                text=line1, fill=color,
+                font=("Consolas", 7, "bold"),
+            )
+            self.create_text(
+                px, py - r - 1,
+                text=line2, fill=color,
+                font=("Consolas", 7),
+            )
 
     def _draw_legend(self) -> None:
-        """Dibuja la leyenda de colores en la esquina superior izquierda."""
-        x, y = 6, 6
-        box_size = 8
+        """Dibuja la leyenda de tipos de agente en la esquina inferior izquierda."""
+        cs = self.cell_size
+        # Ancla en la esquina inferior izquierda (dentro del territorio)
+        x0 = int(4 * cs)
+        y0 = int(84 * cs)
+        box = 8
         row_h = 13
+        pad = 4
+
+        # Fondo semitransparente
+        total_h = len(self.LEGEND) * row_h + pad * 2
+        self.create_rectangle(
+            x0 - pad, y0 - pad,
+            x0 + 70, y0 + total_h - pad,
+            fill="#00000088", outline="", stipple="gray50",
+        )
+
+        y = y0
         for label, color in self.LEGEND:
-            self.create_rectangle(x, y, x + box_size, y + box_size, fill=color, outline="")
+            self.create_rectangle(x0, y, x0 + box, y + box, fill=color, outline="")
             self.create_text(
-                x + box_size + 3, y + box_size // 2,
+                x0 + box + 3, y + box // 2,
                 text=label, anchor="w",
-                fill="#cccccc", font=("Consolas", 7),
+                fill="#dddddd", font=("Consolas", 7),
             )
             y += row_h
 
-    def _draw_zones(self) -> None:
-        """Marca las zonas clave del mapa (lab, Casa Blanca, base militar)."""
-        zones = [
-            (config.LAB_POS,          "LAB",   "#00cfff"),
-            (config.WHITEHOUSE_POS,   "C.B.",  "#ffffff"),
-            (config.MILITARY_BASE_POS,"BASE",  "#00ff88"),
-        ]
-        for (gx, gy), label, color in zones:
-            px = gx * self.cell_size
-            py = gy * self.cell_size
-            r = config.LAB_RADIUS * self.cell_size
-            self.create_oval(
-                px - r, py - r, px + r, py + r,
-                outline=color, fill="", width=1, dash=(3, 3),
-            )
-            self.create_text(
-                px, py - r - 3,
-                text=label, fill=color, font=("Consolas", 7, "bold"),
-            )
-
     # ------------------------------------------------------------------
-    # Renderizado
+    # Renderizado de agentes (frame a frame)
     # ------------------------------------------------------------------
 
     def render(
@@ -148,38 +264,24 @@ class GridCanvas(tk.Canvas):
         snapshot: Dict[Tuple[int, int], Dict[str, str]],
     ) -> None:
         """
-        Renderiza el estado del grid a partir de un snapshot.
+        Actualiza los agentes visibles a partir del snapshot del Engine.
 
-        Para cada posición con agente en el snapshot, dibuja o actualiza
-        un rectángulo con el color correspondiente. Las celdas que ya no
-        tienen agente se limpian.
+        Limpia celdas que ya no tienen agente (delete del rectángulo para
+        que el mapa subyacente sea visible) y dibuja/actualiza las nuevas.
 
         Args:
-            snapshot: Dict de {(x, y): {"type": str, "role": str,
-                      "state": str, "color": str}} generado por
-                      World.get_state_snapshot().
+            snapshot: Dict de {(x, y): {"color": str, ...}} del World.
         """
-        # Detectar celdas que ya no tienen agente
         stale = set(self._rect_ids.keys()) - set(snapshot.keys())
         for pos in stale:
             self._clear_cell(pos)
 
-        # Dibujar/actualizar celdas con agentes
         for pos, agent_data in snapshot.items():
             color = agent_data.get("color", config.COLOR_NORMAL)
             self._draw_cell(pos, color)
 
     def _draw_cell(self, pos: Tuple[int, int], color: str) -> None:
-        """
-        Dibuja o actualiza el rectángulo de una celda.
-
-        Si ya existe un rectángulo para esa posición, solo actualiza
-        el color. Si no, crea uno nuevo.
-
-        Args:
-            pos: Posición (x, y) en el grid.
-            color: Color de relleno del rectángulo.
-        """
+        """Dibuja o actualiza el rectángulo de un agente."""
         x1 = pos[0] * self.cell_size
         y1 = pos[1] * self.cell_size
         x2 = x1 + self.cell_size
@@ -191,25 +293,18 @@ class GridCanvas(tk.Canvas):
             rect_id = self.create_rectangle(
                 x1, y1, x2, y2,
                 fill=color,
-                outline="",  # Sin borde para mejor rendimiento
+                outline="",
             )
             self._rect_ids[pos] = rect_id
 
     def _clear_cell(self, pos: Tuple[int, int]) -> None:
-        """
-        Limpia una celda (la pone en color de fondo).
-
-        Args:
-            pos: Posición (x, y) a limpiar.
-        """
+        """Elimina el rectángulo de un agente para exponer el mapa."""
         if pos in self._rect_ids:
-            self.itemconfig(self._rect_ids[pos], fill=config.COLOR_EMPTY)
+            self.delete(self._rect_ids[pos])
             del self._rect_ids[pos]
 
     def clear(self) -> None:
-        """
-        Limpia todo el canvas, eliminando todos los rectángulos dibujados.
-        """
+        """Elimina todos los rectángulos de agentes (sin tocar el mapa base)."""
         for rect_id in self._rect_ids.values():
             self.delete(rect_id)
         self._rect_ids.clear()
@@ -219,18 +314,7 @@ class GridCanvas(tk.Canvas):
     # ------------------------------------------------------------------
 
     def pos_to_grid(self, pixel_x: int, pixel_y: int) -> Tuple[int, int]:
-        """
-        Convierte coordenadas de píxel a coordenadas de grid.
-
-        Útil para detectar clics del usuario sobre el canvas.
-
-        Args:
-            pixel_x: Coordenada X en píxeles.
-            pixel_y: Coordenada Y en píxeles.
-
-        Returns:
-            Tupla (grid_x, grid_y) correspondiente.
-        """
+        """Convierte coordenadas de píxel a celda del grid."""
         grid_x = int(pixel_x / self.cell_size)
         grid_y = int(pixel_y / self.cell_size)
         return (
