@@ -129,11 +129,18 @@ class App(tk.Tk):
         self.grid_canvas.render(snapshot["grid"])
 
         # Actualizar estadísticas
+        antidote_pct = snapshot.get("antidote_pct", 0)
+        antidote_str = (
+            "¡LISTO!" if antidote_pct >= 100
+            else f"{antidote_pct}%"
+        )
         self.stats_panel.update({
             "n_humans": snapshot["n_humans"],
             "n_zombies": snapshot["n_zombies"],
+            "infected": snapshot.get("infected", 0),
             "tick": snapshot["tick"],
             "strategy": snapshot["strategy"],
+            "antidote": antidote_str,
             "result": snapshot["result"] or "En curso",
         })
 

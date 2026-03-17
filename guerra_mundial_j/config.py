@@ -20,6 +20,14 @@ NUM_MILITARY: int = 10        # Subconjunto de humanos tipo Military
 NUM_POLITICIANS: int = 2      # Subconjunto de humanos tipo Politician
 
 # ---------------------------------------------------------------------------
+# Localizaciones clave del mapa (x, y)
+# ---------------------------------------------------------------------------
+LAB_POS: tuple = (80, 80)          # Base científica (esquina inferior-derecha)
+LAB_RADIUS: int = 3                # Radio de detección de la base en celdas
+WHITEHOUSE_POS: tuple = (90, 10)   # Casa Blanca (arriba-derecha)
+MILITARY_BASE_POS: tuple = (10, 90) # Base militar (abajo-izquierda)
+
+# ---------------------------------------------------------------------------
 # Parámetros de probabilidad
 # ---------------------------------------------------------------------------
 P_INFECT: float = 0.4         # Probabilidad de infección en encuentro
@@ -38,6 +46,7 @@ VISION_ZOMBIE: int = 15       # Radio de visión de un zombi
 TICK_SPEED: float = 0.1       # Segundos entre ticks de cada agente (base)
 WIN_CHECK_INTERVAL: float = 1.0   # Segundos entre comprobaciones de victoria
 ANTIDOTE_TICKS: int = 500     # Ticks necesarios para que un Scientist complete antídoto
+INFECTION_DELAY_TICKS: int = 25   # Ticks de incubación antes de que un infectado se convierta
 
 # ---------------------------------------------------------------------------
 # Colores de la UI (Tkinter color strings)

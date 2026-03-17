@@ -28,6 +28,16 @@ class GridCanvas(tk.Canvas):
         _rect_ids (Dict): Cache de IDs de rectángulos para reusar.
     """
 
+    # Leyenda de colores (label, color)
+    LEGEND = [
+        ("Normal",     config.COLOR_NORMAL),
+        ("Militar",    config.COLOR_MILITARY),
+        ("Científico", config.COLOR_SCIENTIST),
+        ("Político",   config.COLOR_POLITICIAN),
+        ("Zombi",      config.COLOR_ZOMBIE),
+        ("Infectado",  config.COLOR_INFECTED),
+    ]
+
     def __init__(self, parent: tk.Widget, size: int = config.CANVAS_SIZE) -> None:
         """
         Inicializa el canvas con fondo oscuro.
@@ -47,6 +57,8 @@ class GridCanvas(tk.Canvas):
         self.cell_size: float = size / config.GRID_SIZE
         self._rect_ids: Dict[Tuple[int, int], int] = {}
         self._draw_grid_lines()
+        self._draw_legend()
+        self._draw_zones()
 
     # ------------------------------------------------------------------
     # Inicialización visual
@@ -68,6 +80,44 @@ class GridCanvas(tk.Canvas):
             self.create_line(coord, 0, coord, self.canvas_size, fill="#2a2a3e", width=0.5)
             # Líneas horizontales
             self.create_line(0, coord, self.canvas_size, coord, fill="#2a2a3e", width=0.5)
+
+    # ------------------------------------------------------------------
+    # Inicialización visual: leyenda y zonas clave
+    # ------------------------------------------------------------------
+
+    def _draw_legend(self) -> None:
+        """Dibuja la leyenda de colores en la esquina superior izquierda."""
+        x, y = 6, 6
+        box_size = 8
+        row_h = 13
+        for label, color in self.LEGEND:
+            self.create_rectangle(x, y, x + box_size, y + box_size, fill=color, outline="")
+            self.create_text(
+                x + box_size + 3, y + box_size // 2,
+                text=label, anchor="w",
+                fill="#cccccc", font=("Consolas", 7),
+            )
+            y += row_h
+
+    def _draw_zones(self) -> None:
+        """Marca las zonas clave del mapa (lab, Casa Blanca, base militar)."""
+        zones = [
+            (config.LAB_POS,          "LAB",   "#00cfff"),
+            (config.WHITEHOUSE_POS,   "C.B.",  "#ffffff"),
+            (config.MILITARY_BASE_POS,"BASE",  "#00ff88"),
+        ]
+        for (gx, gy), label, color in zones:
+            px = gx * self.cell_size
+            py = gy * self.cell_size
+            r = config.LAB_RADIUS * self.cell_size
+            self.create_oval(
+                px - r, py - r, px + r, py + r,
+                outline=color, fill="", width=1, dash=(3, 3),
+            )
+            self.create_text(
+                px, py - r - 3,
+                text=label, fill=color, font=("Consolas", 7, "bold"),
+            )
 
     # ------------------------------------------------------------------
     # Renderizado

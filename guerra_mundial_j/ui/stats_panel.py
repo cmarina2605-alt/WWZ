@@ -34,6 +34,7 @@ class StatsPanel(tk.Frame):
         ("infected",  "🟠 Infectados",    "#ffa500"),
         ("tick",      "⏱  Tick",          "#87ceeb"),
         ("strategy",  "⚙  Estrategia",    "#da70d6"),
+        ("antidote",  "💉 Antídoto",      "#00cfff"),
         ("result",    "🏁 Estado",         "#ffffff"),
     ]
 

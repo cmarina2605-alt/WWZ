@@ -96,14 +96,24 @@ class Engine:
         """
         Crea todos los agentes, los posiciona y lanza sus threads.
 
-        También inicia el thread de supervisión de condiciones de victoria
-        y el thread del contador de ticks global.
+        También inicia el thread de supervisión de condiciones de victoria,
+        el thread del contador de ticks global y el monitor de infectados.
         """
         self._create_agents()
         self._start_all_threads()
 
         self.running = True
         self.start_time = time.time()
+
+        # Evento narrativo de apertura: el origen del brote
+        self.world.push_event(
+            "outbreak",
+            "🧪 José el Profe, harto de sus alumnos, ha creado la Fórmula Z...",
+        )
+        self.world.push_event(
+            "outbreak",
+            "🧟 ¡El experimento ha salido MAL! ¡José se convierte en zombi!",
+        )
 
         # Thread de supervisión de victorias
         self._win_thread = threading.Thread(
@@ -116,6 +126,12 @@ class Engine:
             target=self._tick_loop, daemon=True, name="TickCounter"
         )
         self._tick_thread.start()
+
+        # Thread de conversión de infectados (bug crítico: antes nunca se llamaba)
+        self._infection_thread = threading.Thread(
+            target=self._infection_monitor_loop, daemon=True, name="InfectionMonitor"
+        )
+        self._infection_thread.start()
 
     def pause(self) -> None:
         """
@@ -233,6 +249,48 @@ class Engine:
             self.tick += 1
             self.world.tick = self.tick
 
+    def _infection_monitor_loop(self) -> None:
+        """
+        Monitoriza agentes infectados y los convierte en zombis tras un retardo.
+
+        Implementa el período de incubación: un humano infectado no se
+        convierte inmediatamente, sino después de INFECTION_DELAY_TICKS ticks.
+        Esto evita race conditions al delegar la creación del nuevo Zombie
+        a un thread dedicado en lugar de hacerlo dentro del thread del agente.
+        """
+        infection_timers: dict = {}  # agent_id -> tick en que se infectó
+
+        while not game_over.is_set():
+            time.sleep(0.3)
+            self._pause_event.wait()
+            if game_over.is_set():
+                break
+
+            alive_ids: set = set()
+            for agent in list(self.agents):
+                alive_ids.add(agent.agent_id)
+                if (
+                    agent.state == "infected"
+                    and agent.__class__.__name__ != "Zombie"
+                    and agent.is_alive()
+                ):
+                    if agent.agent_id not in infection_timers:
+                        # Primera vez que vemos este agente infectado
+                        infection_timers[agent.agent_id] = self.tick
+                    elif (
+                        self.tick - infection_timers[agent.agent_id]
+                        >= config.INFECTION_DELAY_TICKS
+                    ):
+                        # Período de incubación cumplido → convertir
+                        infection_timers.pop(agent.agent_id, None)
+                        if agent.is_alive():
+                            self.convert_infected(agent)
+
+            # Limpiar timers de agentes que ya no existen
+            for aid in list(infection_timers.keys()):
+                if aid not in alive_ids:
+                    del infection_timers[aid]
+
     def _win_condition_loop(self) -> None:
         """
         Comprueba las condiciones de victoria/derrota periódicamente.
@@ -334,10 +392,29 @@ class Engine:
         Returns:
             Dict con contadores, tick, resultado y snapshot del grid.
         """
+        infected_count = sum(
+            1 for a in self.agents
+            if a.state == "infected" and a.__class__.__name__ != "Zombie"
+        )
+        # Progreso del antídoto: el científico más avanzado
+        antidote_pct = 0
+        from agents.human import Scientist
+        scientists_in_lab = [
+            a for a in self.agents
+            if isinstance(a, Scientist) and a.is_alive()
+        ]
+        if scientists_in_lab:
+            best_progress = max(
+                getattr(a, "antidote_progress", 0) for a in scientists_in_lab
+            )
+            antidote_pct = min(100, int(best_progress / max(1, config.ANTIDOTE_TICKS) * 100))
+
         return {
             "tick": self.tick,
             "n_humans": self.n_humans,
             "n_zombies": self.n_zombies,
+            "infected": infected_count,
+            "antidote_pct": antidote_pct,
             "result": self.result,
             "running": self.running,
             "paused": self.paused,

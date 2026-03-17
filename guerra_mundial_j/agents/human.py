@@ -199,14 +199,36 @@ class Scientist(Human):
         """
         Actualización del científico.
 
-        Si está en la base científica, avanza en el antídoto.
-        Si no, comportamiento humano estándar con tendencia a ir al lab.
+        Prioridad:
+        1. Si hay zombis cerca → huir (comportamiento humano estándar).
+        2. Si está en el lab → trabajar en el antídoto.
+        3. Si no está en el lab → moverse hacia él.
         """
+        from simulation import movement
+
         if not self.is_alive():
             return
 
-        if self.in_lab and not antidote_ready.is_set():
+        # Detectar si estamos cerca del laboratorio
+        dist_to_lab = self.distance_to(config.LAB_POS)
+        if dist_to_lab <= config.LAB_RADIUS:
+            self.in_lab = True
+
+        # Si hay zombis cerca, huir tiene prioridad sobre el laboratorio
+        nearby = self.world.get_agents_in_radius(self.pos, config.VISION_HUMAN)
+        zombies_nearby = [a for a in nearby if a.__class__.__name__ == "Zombie"]
+
+        if zombies_nearby:
+            self.in_lab = False  # Salir del lab si hay peligro
+            super().update()
+        elif self.in_lab and not antidote_ready.is_set():
             self._work_on_antidote()
+            self._update_fear(0)  # El científico se calma trabajando
+        elif not self.in_lab:
+            # Moverse hacia el laboratorio
+            self._update_fear(0)
+            next_pos = movement.move_towards(self.pos, config.LAB_POS, self.world)
+            self.world.move_agent(self, next_pos)
         else:
             super().update()
 
@@ -224,7 +246,10 @@ class Scientist(Human):
         if self.antidote_progress >= ticks_needed:
             antidote_ready.set()
             national_alert.set()
-            # TODO: registrar evento en la base de datos
+            self.world.push_event(
+                "antidote",
+                f"💉 ¡ANTÍDOTO COMPLETADO! El científico #{self.agent_id} ha encontrado la cura",
+            )
 
     def get_color(self) -> str:
         if self.state == "infected":
@@ -385,7 +410,7 @@ class Politician(Human):
             national_alert.set()
             self.alert_cooldown = self.ALERT_COOLDOWN_TICKS
             msg = random.choice(self._alert_messages)
-            # TODO: enviar a EventLog via cola de eventos
+            self.world.push_event("alert", msg)
 
     def get_color(self) -> str:
         if self.state == "infected":
