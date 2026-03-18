@@ -1,27 +1,27 @@
 """
-world.py — Representación del mundo compartido entre todos los agentes.
+world.py — Shared world representation for all simulation agents.
 
-El World es el único estado global de la simulación. Todos los agentes
-(que corren en threads distintos) acceden al grid a través de esta clase,
-que garantiza la consistencia mediante un threading.Lock.
+World is the only global state of the simulation. All agents
+(running in different threads) access the grid through this class,
+which guarantees consistency via a threading.Lock.
 
-Estructura interna:
-    grid: Dict[(x,y), Agent] — mapa de posición a agente; una celda,
-          un agente. El lock protege todas las operaciones sobre él.
-    tick: int — contador global de ticks, incrementado por el Engine.
-    _event_queue: List[dict] — cola de eventos (infecciones, muertes,
-          alertas...) consumida por la UI y potencialmente por la DB.
+Internal structure:
+    grid: Dict[(x,y), Agent] — position-to-agent map; one cell,
+          one agent. The lock protects all operations on it.
+    tick: int — global tick counter, incremented by the Engine.
+    _event_queue: List[dict] — event queue (infections, deaths,
+          alerts...) consumed by the UI and optionally by the DB.
 
-API principal:
-    place_agent(agent, pos)          — coloca un agente (falla si hay otro).
-    move_agent(agent, new_pos)       — mueve atómicamente (falla si ocupado).
-    remove_agent(agent)              — elimina del grid (al morir).
-    get_agents_in_radius(pos, r)     — lista de agentes en un radio dado.
-    get_state_snapshot()             — copia thread-safe para renderizar la UI.
-    push_event / pop_events          — cola de eventos para el EventLog y la DB.
+Main API:
+    place_agent(agent, pos)          — places an agent (fails if cell occupied).
+    move_agent(agent, new_pos)       — moves atomically (fails if occupied).
+    remove_agent(agent)              — removes from the grid (on death).
+    get_agents_in_radius(pos, r)     — list of agents within a given radius.
+    get_state_snapshot()             — thread-safe copy for rendering the UI.
+    push_event / pop_events          — event queue for the EventLog and DB.
 
-Nota de diseño: los métodos adquieren el lock internamente, por lo que los
-llamadores externos NO necesitan hacerlo salvo para operaciones compuestas.
+Design note: methods acquire the lock internally, so external callers
+do NOT need to do so except for compound operations requiring atomicity.
 """
 
 import threading
@@ -36,26 +36,26 @@ if TYPE_CHECKING:
 
 class World:
     """
-    Mundo de la simulación: grid 2D compartido entre threads.
+    Simulation world: 2D grid shared across threads.
 
-    El acceso al grid se sincroniza con un threading.Lock global
-    llamado `lock`. Los métodos de esta clase adquieren el lock
-    internamente, por lo que los llamadores no necesitan hacerlo
-    (excepto para operaciones compuestas que requieran atomicidad).
+    Grid access is synchronized with a global threading.Lock
+    named `lock`. The methods of this class acquire the lock
+    internally, so callers do not need to do so
+    (except for compound operations requiring atomicity).
 
     Attributes:
-        size (int): Tamaño del lado del grid cuadrado.
-        lock (threading.Lock): Lock global para proteger el grid.
-        grid (Dict[Tuple[int,int], Agent]): Mapa de posición a agente.
-        tick (int): Contador de ticks globales (incrementado por Engine).
+        size (int): Side length of the square grid.
+        lock (threading.Lock): Global lock to protect the grid.
+        grid (Dict[Tuple[int,int], Agent]): Position-to-agent map.
+        tick (int): Global tick counter (incremented by Engine).
     """
 
     def __init__(self, size: int = config.GRID_SIZE) -> None:
         """
-        Inicializa el mundo con un grid vacío.
+        Initializes the world with an empty grid.
 
         Args:
-            size: Lado del grid cuadrado (celdas).
+            size: Side of the square grid (cells).
         """
         self.size: int = size
         self.lock: threading.Lock = threading.Lock()
@@ -63,24 +63,24 @@ class World:
         self.tick: int = 0
         self._event_queue: List[Dict[str, Any]] = []
         self._event_lock: threading.Lock = threading.Lock()
-        # Estrategia activa: "none" hasta que la Casa Blanca responda
-        # Todos los agentes la leen desde aquí para modular su comportamiento
+        # Active strategy: "none" until the White House responds
+        # All agents read from here to modulate their behavior
         self.strategy: str = "none"
 
     # ------------------------------------------------------------------
-    # Operaciones sobre el grid
+    # Grid operations
     # ------------------------------------------------------------------
 
     def place_agent(self, agent: "Agent", pos: Tuple[int, int]) -> bool:
         """
-        Coloca un agente en una posición del grid.
+        Places an agent at a grid position.
 
         Args:
-            agent: Agente a colocar.
-            pos: Posición (x, y) objetivo.
+            agent: Agent to place.
+            pos: Target position (x, y).
 
         Returns:
-            bool: True si se colocó correctamente, False si la celda estaba ocupada.
+            bool: True if placed successfully, False if the cell was occupied.
         """
         pos = self._clamp(pos)
         with self.lock:
@@ -92,38 +92,38 @@ class World:
 
     def move_agent(self, agent: "Agent", new_pos: Tuple[int, int]) -> bool:
         """
-        Mueve un agente a una nueva posición.
+        Moves an agent to a new position.
 
-        Elimina al agente de su posición actual y lo coloca en new_pos.
-        Si new_pos está ocupada, no se realiza el movimiento.
+        Removes the agent from its current position and places it at new_pos.
+        If new_pos is occupied, the move is not performed.
 
         Args:
-            agent: Agente a mover.
-            new_pos: Nueva posición (x, y).
+            agent: Agent to move.
+            new_pos: New position (x, y).
 
         Returns:
-            bool: True si el movimiento fue exitoso.
+            bool: True if the move was successful.
         """
         new_pos = self._clamp(new_pos)
         with self.lock:
-            # Verificar que la celda destino está libre
+            # Verify that the destination cell is free
             if new_pos in self.grid and self.grid[new_pos] is not agent:
                 return False
-            # Eliminar de posición actual
+            # Remove from current position
             old_pos = agent.pos
             if old_pos in self.grid and self.grid[old_pos] is agent:
                 del self.grid[old_pos]
-            # Colocar en nueva posición
+            # Place at new position
             self.grid[new_pos] = agent
             agent.pos = new_pos
             return True
 
     def remove_agent(self, agent: "Agent") -> None:
         """
-        Elimina un agente del grid.
+        Removes an agent from the grid.
 
         Args:
-            agent: Agente a eliminar.
+            agent: Agent to remove.
         """
         with self.lock:
             if agent.pos in self.grid and self.grid[agent.pos] is agent:
@@ -133,17 +133,17 @@ class World:
         self, pos: Tuple[int, int], radius: float
     ) -> List["Agent"]:
         """
-        Retorna todos los agentes dentro de un radio dado.
+        Returns all agents within a given radius.
 
-        Utiliza distancia euclidiana. No incluye al agente en la
-        posición exacta de pos (si es el mismo que pregunta).
+        Uses Euclidean distance. Does not include the agent at the
+        exact position of pos (if it is the one asking).
 
         Args:
-            pos: Centro de búsqueda (x, y).
-            radius: Radio de búsqueda en celdas.
+            pos: Search center (x, y).
+            radius: Search radius in cells.
 
         Returns:
-            Lista de agentes dentro del radio.
+            List of agents within the radius.
         """
         results: List["Agent"] = []
         with self.lock:
@@ -157,36 +157,36 @@ class World:
 
     def get_agent_at(self, pos: Tuple[int, int]) -> Optional["Agent"]:
         """
-        Retorna el agente en una posición exacta, o None.
+        Returns the agent at an exact position, or None.
 
         Args:
-            pos: Posición (x, y) a consultar.
+            pos: Position (x, y) to query.
 
         Returns:
-            Agente en esa posición o None.
+            Agent at that position or None.
         """
         with self.lock:
             return self.grid.get(pos)
 
     def is_cell_free(self, pos: Tuple[int, int]) -> bool:
         """
-        Comprueba si una celda está libre (sin lock externo).
+        Checks whether a cell is free (without external lock).
 
         Args:
-            pos: Posición a comprobar.
+            pos: Position to check.
 
         Returns:
-            bool: True si la celda está libre.
+            bool: True if the cell is free.
         """
         with self.lock:
             return pos not in self.grid
 
     def find_free_cell(self) -> Optional[Tuple[int, int]]:
         """
-        Busca una celda libre aleatoria en el grid.
+        Finds a random free cell in the grid.
 
         Returns:
-            Tupla (x, y) de una celda libre, o None si el grid está lleno.
+            Tuple (x, y) of a free cell, or None if the grid is full.
         """
         import random
         attempts = 0
@@ -201,18 +201,18 @@ class World:
         return None
 
     # ------------------------------------------------------------------
-    # Snapshot thread-safe para la UI
+    # Thread-safe snapshot for the UI
     # ------------------------------------------------------------------
 
     def get_state_snapshot(self) -> Dict[Tuple[int, int], Dict[str, str]]:
         """
-        Retorna una copia del estado actual del grid para renderizado.
+        Returns a copy of the current grid state for rendering.
 
-        La copia se hace bajo el lock para garantizar consistencia.
-        El resultado puede leerse sin lock una vez obtenido.
+        The copy is made under the lock to guarantee consistency.
+        The result can be read without the lock once obtained.
 
         Returns:
-            Dict de {(x, y): {"type": str, "role": str, "state": str}}
+            Dict of {(x, y): {"type": str, "role": str, "state": str}}
         """
         snapshot: Dict[Tuple[int, int], Dict[str, str]] = {}
         with self.lock:
@@ -228,19 +228,19 @@ class World:
         return snapshot
 
     # ------------------------------------------------------------------
-    # Eventos del mundo
+    # World events
     # ------------------------------------------------------------------
 
     def push_event(self, event_type: str, description: str) -> None:
         """
-        Registra un evento en la cola de eventos del mundo.
+        Records an event in the world's event queue.
 
-        Los eventos son consumidos por el EventLog de la UI y por
-        la base de datos.
+        Events are consumed by the UI's EventLog and by
+        the database.
 
         Args:
-            event_type: Tipo de evento (e.g. "infection", "death", "antidote").
-            description: Descripción legible del evento.
+            event_type: Type of event (e.g. "infection", "death", "antidote").
+            description: Human-readable description of the event.
         """
         with self._event_lock:
             self._event_queue.append({
@@ -251,10 +251,10 @@ class World:
 
     def pop_events(self) -> List[Dict[str, Any]]:
         """
-        Extrae y retorna todos los eventos pendientes.
+        Extracts and returns all pending events.
 
         Returns:
-            Lista de dicts de eventos. Vacía si no hay eventos nuevos.
+            List of event dicts. Empty if there are no new events.
         """
         with self._event_lock:
             events = self._event_queue.copy()
@@ -262,18 +262,18 @@ class World:
         return events
 
     # ------------------------------------------------------------------
-    # Utilidades internas
+    # Internal utilities
     # ------------------------------------------------------------------
 
     def _clamp(self, pos: Tuple[int, int]) -> Tuple[int, int]:
         """
-        Asegura que una posición está dentro de los límites del grid.
+        Ensures a position is within the grid boundaries.
 
         Args:
-            pos: Posición (x, y) potencialmente fuera de rango.
+            pos: Position (x, y) potentially out of range.
 
         Returns:
-            Posición clampeada dentro de [0, size-1].
+            Position clamped within [0, size-1].
         """
         x = max(0, min(self.size - 1, pos[0]))
         y = max(0, min(self.size - 1, pos[1]))
@@ -281,10 +281,10 @@ class World:
 
     def count_agents_by_type(self) -> Dict[str, int]:
         """
-        Cuenta agentes por tipo (Zombie, Human, etc.).
+        Counts agents by type (Zombie, Human, etc.).
 
         Returns:
-            Dict de {tipo: count}.
+            Dict of {type: count}.
         """
         counts: Dict[str, int] = {}
         with self.lock:

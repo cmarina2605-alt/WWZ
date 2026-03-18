@@ -1,26 +1,26 @@
 """
-human.py — Clases de agentes humanos de la simulación.
+human.py — Human agent classes for the simulation.
 
-Implementa la jerarquía de humanos que pueblan el grid:
+Implements the hierarchy of humans that populate the grid:
 
-    Human (Agent)   — base: tiene miedo (fear) y empatía (empathy).
-    ├── Normal       — ciudadano sin habilidades especiales; huye de zombis.
-    ├── Scientist    — navega activamente hacia el laboratorio (LAB_POS) para
-    │                  trabajar en el antídoto; huye si detecta zombis cerca.
-    ├── Military     — si fuerza > FORCE_FLEE_THRESHOLD, persigue zombis en
-    │                  lugar de huir; usa munición para aumentar prob. de matar.
-    └── Politician   — emite alertas nacionales (national_alert) al ver zombis,
-                       lo que acelera la respuesta de los militares.
+    Human (Agent)   — base: has fear and empathy.
+    ├── Normal       — ordinary citizen with no special skills; flees from zombies.
+    ├── Scientist    — actively navigates toward the laboratory (LAB_POS) to
+    │                  work on the antidote; flees if zombies are detected nearby.
+    ├── Military     — if force > FORCE_FLEE_THRESHOLD, chases zombies instead
+    │                  of fleeing; uses ammo to increase kill probability.
+    └── Politician   — emits national alerts (national_alert) when seeing zombies,
+                       which speeds up the military response.
 
-Mecánicas clave:
-    - Miedo (fear): aumenta al ver zombis, disminuye con el tiempo.
-      Un miedo alto activa el estado "running" y puede penalizar atributos.
-    - Pánico social (panic_spread): si ≥4 vecinos están corriendo, el agente
-      entra en pánico aunque no vea zombis directamente.
-    - Infección: Human.infect() marca el estado como "infected"; la conversión
-      real a Zombie la gestiona el InfectionMonitor del Engine.
-    - Antídoto: cuando un Scientist acumula suficientes ticks en el lab,
-      activa antidote_ready y empuja un evento al EventLog.
+Key mechanics:
+    - Fear: increases when zombies are seen, decreases over time.
+      High fear activates the "running" state and can penalize attributes.
+    - Social panic (panic_spread): if ≥4 neighbors are running, the agent
+      enters panic even without directly seeing zombies.
+    - Infection: Human.infect() marks the state as "infected"; the actual
+      conversion to Zombie is managed by the Engine's InfectionMonitor.
+    - Antidote: when a Scientist accumulates enough ticks in the lab,
+      it activates antidote_ready and pushes an event to the EventLog.
 """
 
 import random
@@ -36,15 +36,15 @@ if TYPE_CHECKING:
 
 class Human(Agent):
     """
-    Agente humano base.
+    Base human agent.
 
-    Extiende Agent añadiendo empatía y miedo, que modulan las
-    decisiones de huida, agrupamiento y combate.
+    Extends Agent by adding empathy and fear, which modulate
+    flee, grouping and combat decisions.
 
     Attributes:
-        empathy (int): Tendencia a ayudar a otros (0-100).
-        fear (int): Nivel de pánico actual (0-100); aumenta al ver zombis.
-        role (str): Rol del humano (normal/scientist/military/politician).
+        empathy (int): Tendency to help others (0-100).
+        fear (int): Current panic level (0-100); increases when zombies are seen.
+        role (str): Human role (normal/scientist/military/politician).
     """
 
     def __init__(
@@ -57,15 +57,15 @@ class Human(Agent):
         fear: int = 10,
     ) -> None:
         """
-        Inicializa un humano con empatía y miedo.
+        Initializes a human with empathy and fear.
 
         Args:
-            pos: Posición inicial (x, y).
-            world: Referencia al mundo compartido.
-            force: Fuerza física (0-100).
-            age: Edad del agente.
-            empathy: Nivel de empatía (0-100).
-            fear: Miedo inicial (0-100).
+            pos: Initial position (x, y).
+            world: Reference to the shared world.
+            force: Physical force (0-100).
+            age: Agent age.
+            empathy: Empathy level (0-100).
+            fear: Initial fear (0-100).
         """
         super().__init__(pos=pos, world=world, force=force, age=age)
         self.empathy: int = max(0, min(100, empathy))
@@ -73,34 +73,34 @@ class Human(Agent):
         self.role: str = "normal"
 
     # ------------------------------------------------------------------
-    # Lógica principal
+    # Main logic
     # ------------------------------------------------------------------
 
     def update(self) -> None:
         """
-        Lógica de actualización por tick para humanos.
+        Per-tick update logic for humans.
 
-        1. Detecta zombis cercanos y actualiza el miedo.
-        2. Calcula la siguiente posición (via movement).
-        3. Comprueba encuentros con zombis en la nueva posición.
-        4. Actualiza el estado según el contexto.
+        1. Detects nearby zombies and updates fear.
+        2. Calculates the next position (via movement).
+        3. Checks for zombie encounters at the new position.
+        4. Updates state based on context.
         """
         from simulation import movement, combat
 
         if not self.is_alive():
             return
 
-        # Detectar zombis en rango de visión
+        # Detect zombies within vision range
         nearby = self.world.get_agents_in_radius(self.pos, config.VISION_HUMAN)
         zombies_nearby = [a for a in nearby if a.__class__.__name__ == "Zombie"]
 
-        # Actualizar miedo
+        # Update fear
         self._update_fear(len(zombies_nearby))
 
-        # Calcular próxima posición
+        # Calculate next position
         next_pos = movement.calculate_next_pos(self, self.world)
 
-        # Comprobar si hay zombi en la celda destino o adyacente
+        # Check if there is a zombie at the destination cell or adjacent
         agents_at_dest = self.world.get_agents_in_radius(next_pos, 1)
         zombies_at_dest = [a for a in agents_at_dest if a.__class__.__name__ == "Zombie"]
 
@@ -108,18 +108,18 @@ class Human(Agent):
             zombie = zombies_at_dest[0]
             combat.resolve_encounter(self, zombie, self.world)
         else:
-            # Mover al agente
+            # Move the agent
             self.world.move_agent(self, next_pos)
 
-        # Propagación del pánico
+        # Panic propagation
         movement.panic_spread(self, self.world)
 
     def _update_fear(self, zombie_count: int) -> None:
         """
-        Actualiza el nivel de miedo según la cantidad de zombis visibles.
+        Updates the fear level based on the number of visible zombies.
 
         Args:
-            zombie_count: Número de zombis detectados en el rango de visión.
+            zombie_count: Number of zombies detected within vision range.
         """
         if zombie_count > 0:
             self.fear = min(100, self.fear + zombie_count * 10)
@@ -130,7 +130,7 @@ class Human(Agent):
                 self.set_state("calm")
 
     def get_color(self) -> str:
-        """Retorna el color según el rol del humano."""
+        """Returns the color based on the human's role."""
         if self.state == "infected":
             return config.COLOR_INFECTED
         if self.state == "dead":
@@ -139,10 +139,10 @@ class Human(Agent):
 
     def infect(self) -> None:
         """
-        Marca al humano como infectado.
+        Marks the human as infected.
 
-        Esto inicia el proceso de conversión a zombi, gestionado
-        por el motor de simulación.
+        This begins the conversion process to zombie, managed
+        by the simulation engine.
         """
         self.set_state("infected")
 
@@ -154,14 +154,14 @@ class Human(Agent):
 
 
 # ---------------------------------------------------------------------------
-# Subclases especializadas
+# Specialized subclasses
 # ---------------------------------------------------------------------------
 
 class Normal(Human):
     """
-    Humano corriente sin habilidades especiales.
+    Ordinary human with no special skills.
 
-    Comportamiento estándar: huye de los zombis y busca refugio.
+    Standard behavior: flees from zombies and seeks shelter.
     """
 
     def __init__(self, pos: Tuple[int, int], world: "World", **kwargs) -> None:
@@ -178,13 +178,13 @@ class Normal(Human):
 
 class Scientist(Human):
     """
-    Científico que puede contribuir al antídoto.
+    Scientist who can contribute to the antidote.
 
     Attributes:
-        intelligence (int): Nivel de inteligencia (0-100); reduce tiempo
-            necesario para completar el antídoto.
-        antidote_progress (int): Ticks acumulados trabajando en el antídoto.
-        in_lab (bool): Si está actualmente en la base científica.
+        intelligence (int): Intelligence level (0-100); reduces the time
+            needed to complete the antidote.
+        antidote_progress (int): Ticks accumulated working on the antidote.
+        in_lab (bool): Whether currently at the science base.
     """
 
     def __init__(
@@ -195,10 +195,10 @@ class Scientist(Human):
         **kwargs,
     ) -> None:
         """
-        Inicializa un Scientist con inteligencia adicional.
+        Initializes a Scientist with additional intelligence.
 
         Args:
-            intelligence: Nivel de inteligencia (0-100).
+            intelligence: Intelligence level (0-100).
         """
         super().__init__(pos=pos, world=world, **kwargs)
         self.role = "scientist"
@@ -208,35 +208,35 @@ class Scientist(Human):
 
     def update(self) -> None:
         """
-        Actualización del científico.
+        Scientist update logic.
 
-        Prioridad:
-        1. Si hay zombis cerca → huir (comportamiento humano estándar).
-        2. Si está en el lab → trabajar en el antídoto.
-        3. Si no está en el lab → moverse hacia él.
+        Priority:
+        1. If zombies are nearby → flee (standard human behavior).
+        2. If in the lab → work on the antidote.
+        3. If not in the lab → move toward it.
         """
         from simulation import movement
 
         if not self.is_alive():
             return
 
-        # Detectar si estamos cerca del laboratorio
+        # Detect if we are near the laboratory
         dist_to_lab = self.distance_to(config.LAB_POS)
         if dist_to_lab <= config.LAB_RADIUS:
             self.in_lab = True
 
-        # Si hay zombis cerca, huir tiene prioridad sobre el laboratorio
+        # If zombies are nearby, fleeing takes priority over the laboratory
         nearby = self.world.get_agents_in_radius(self.pos, config.VISION_HUMAN)
         zombies_nearby = [a for a in nearby if a.__class__.__name__ == "Zombie"]
 
         if zombies_nearby:
-            self.in_lab = False  # Salir del lab si hay peligro
+            self.in_lab = False  # Leave the lab if there is danger
             super().update()
         elif self.in_lab and not antidote_ready.is_set():
             self._work_on_antidote()
-            self._update_fear(0)  # El científico se calma trabajando
+            self._update_fear(0)  # The scientist calms down while working
         elif not self.in_lab:
-            # Moverse hacia el laboratorio
+            # Move toward the laboratory
             self._update_fear(0)
             next_pos = movement.move_towards(self.pos, config.LAB_POS, self.world)
             self.world.move_agent(self, next_pos)
@@ -245,10 +245,10 @@ class Scientist(Human):
 
     def _work_on_antidote(self) -> None:
         """
-        Avanza en la investigación del antídoto.
+        Advances antidote research.
 
-        El progreso aumenta según la inteligencia del científico.
-        Cuando se completa, activa el evento global antidote_ready.
+        Progress increases based on the scientist's intelligence.
+        When complete, activates the global antidote_ready event.
         """
         progress_rate = 1 + int(self.intelligence / 20)
         self.antidote_progress += progress_rate
@@ -259,7 +259,7 @@ class Scientist(Human):
             national_alert.set()
             self.world.push_event(
                 "antidote",
-                f"💉 ¡ANTÍDOTO COMPLETADO! El científico #{self.agent_id} ha encontrado la cura",
+                f"💉 ANTIDOTE COMPLETED! Scientist #{self.agent_id} has found the cure",
             )
 
     def get_color(self) -> str:
@@ -272,13 +272,13 @@ class Scientist(Human):
 
 class Military(Human):
     """
-    Militar con fuerza aumentada y comportamiento de combate agresivo.
+    Military with increased strength and aggressive combat behavior.
 
-    A diferencia de los civiles, no huye si su fuerza supera
-    FORCE_FLEE_THRESHOLD; en su lugar, entra en estado "fighting".
+    Unlike civilians, does not flee if their strength exceeds
+    FORCE_FLEE_THRESHOLD; instead enters the "fighting" state.
 
     Attributes:
-        ammo (int): Munición disponible (afecta probabilidad de matar zombi).
+        ammo (int): Available ammunition (affects probability of killing a zombie).
     """
 
     def __init__(
@@ -289,12 +289,12 @@ class Military(Human):
         **kwargs,
     ) -> None:
         """
-        Inicializa un Military con bonus de fuerza y munición.
+        Initializes a Military with a strength bonus and ammunition.
 
         Args:
-            ammo: Munición inicial.
+            ammo: Initial ammunition.
         """
-        # Aplicar bonus de fuerza
+        # Apply strength bonus
         force = kwargs.pop("force", 50)
         force = min(100, force + config.FORCE_MILITARY_BONUS)
         super().__init__(pos=pos, world=world, force=force, **kwargs)
@@ -303,13 +303,13 @@ class Military(Human):
 
     def update(self) -> None:
         """
-        Actualización del militar.
+        Military update logic.
 
-        Si la fuerza supera el umbral, busca activamente zombis para
-        combatir en lugar de huir.
+        If strength exceeds the threshold, actively seeks zombies to
+        fight instead of fleeing.
 
-        Con estrategia "military_first": radio de visión ampliado (VISION_ZOMBIE)
-        y umbral de fuerza reducido a 30, para que casi todos los militares luchen.
+        With "military_first" strategy: expanded vision radius (VISION_ZOMBIE)
+        and reduced strength threshold to 30, so almost all military units fight.
         """
         from simulation import movement, combat
 
@@ -328,10 +328,10 @@ class Military(Human):
         zombies_nearby = [a for a in nearby if a.__class__.__name__ == "Zombie"]
 
         if zombies_nearby and self.force > force_threshold:
-            # Comportamiento agresivo: acercarse al zombi más cercano
+            # Aggressive behavior: approach the closest zombie
             self.set_state("fighting")
             closest = min(zombies_nearby, key=lambda z: self.distance_to(z.pos))
-            # Mover hacia el zombi
+            # Move toward the zombie
             next_pos = movement.move_towards(self.pos, closest.pos, self.world)
             agents_at = self.world.get_agents_in_radius(next_pos, 0)
             if any(a.__class__.__name__ == "Zombie" for a in agents_at):
@@ -339,15 +339,15 @@ class Military(Human):
             else:
                 self.world.move_agent(self, next_pos)
         else:
-            # Comportamiento estándar (huida)
+            # Standard behavior (flee)
             super().update()
 
     def use_ammo(self) -> bool:
         """
-        Consume una unidad de munición.
+        Consumes one unit of ammunition.
 
         Returns:
-            bool: True si había munición disponible y se consumió.
+            bool: True if ammunition was available and consumed.
         """
         if self.ammo > 0:
             self.ammo -= 1
@@ -364,32 +364,32 @@ class Military(Human):
 
 class Politician(Human):
     """
-    Político con alta empatía que puede emitir alertas nacionales.
+    Politician with high empathy who can issue national alerts.
 
-    Tiene la capacidad de activar el evento national_alert cuando
-    detecta una situación crítica, lo que acelera la respuesta militar.
+    Has the ability to activate the national_alert event when
+    a critical situation is detected, which accelerates the military response.
 
     Attributes:
-        influence (int): Nivel de influencia (0-100); afecta la probabilidad
-            de que la alerta sea efectiva.
-        alert_cooldown (int): Ticks restantes hasta poder emitir otra alerta.
+        influence (int): Influence level (0-100); affects the probability
+            that the alert is effective.
+        alert_cooldown (int): Ticks remaining until another alert can be issued.
     """
 
     ALERT_COOLDOWN_TICKS: int = 50
 
-    # Ideologías disponibles y la estrategia que cada una propone
+    # Available ideologies and the strategy each one proposes
     IDEOLOGY_STRATEGIES: dict = {
-        "hawk":      "military_first",  # El Halcón: respuesta militar total
-        "populist":  "flee",            # El Populista: evacuar al pueblo primero
-        "socialist": "group",           # El Socialista: fuerza en la unión
-        "chaotic":   "random",          # El Indeciso: el gobierno no se pone de acuerdo
+        "hawk":      "military_first",  # The Hawk: full military response
+        "populist":  "flee",            # The Populist: evacuate the people first
+        "socialist": "group",           # The Socialist: strength in unity
+        "chaotic":   "random",          # The Indecisive: the government can't agree
     }
 
     IDEOLOGY_NAMES: dict = {
-        "hawk":      "El Halcón",
-        "populist":  "El Populista",
-        "socialist": "El Socialista",
-        "chaotic":   "El Indeciso",
+        "hawk":      "The Hawk",
+        "populist":  "The Populist",
+        "socialist": "The Socialist",
+        "chaotic":   "The Indecisive",
     }
 
     def __init__(
@@ -401,13 +401,13 @@ class Politician(Human):
         **kwargs,
     ) -> None:
         """
-        Inicializa un Politician con alta empatía, influencia e ideología.
+        Initializes a Politician with high empathy, influence, and ideology.
 
         Args:
-            influence: Nivel de influencia política (0-100). Determina quién
-                gana el debate cuando hay varios políticos vivos.
-            ideology: Una de "hawk", "populist", "socialist", "chaotic".
-                Si es None, se asigna aleatoriamente.
+            influence: Political influence level (0-100). Determines who
+                wins the debate when multiple politicians are alive.
+            ideology: One of "hawk", "populist", "socialist", "chaotic".
+                If None, assigned randomly.
         """
         empathy = kwargs.pop("empathy", 80)
         super().__init__(pos=pos, world=world, empathy=empathy, **kwargs)
@@ -416,17 +416,17 @@ class Politician(Human):
         self.ideology: str = ideology if ideology in self.IDEOLOGY_STRATEGIES else random.choice(list(self.IDEOLOGY_STRATEGIES))
         self.alert_cooldown: int = 0
         self._alert_messages: list[str] = [
-            "📨 Mensaje llega a Casa Blanca",
-            "📨 Declarado estado de emergencia nacional",
-            "📨 Protocolo Z activado",
+            "📨 Message reaches the White House",
+            "📨 National state of emergency declared",
+            "📨 Protocol Z activated",
         ]
 
     def update(self) -> None:
         """
-        Actualización del político.
+        Politician update logic.
 
-        Intenta emitir alertas nacionales al detectar zombis y
-        sigue comportamiento humano estándar.
+        Tries to issue national alerts when zombies are detected and
+        follows standard human behavior.
         """
         if not self.is_alive():
             return
@@ -444,9 +444,9 @@ class Politician(Human):
 
     def _emit_alert(self) -> None:
         """
-        Emite una alerta nacional si las condiciones se cumplen.
+        Issues a national alert if conditions are met.
 
-        La probabilidad de éxito depende del nivel de influencia.
+        Success probability depends on the influence level.
         """
         if random.random() < self.influence / 100.0:
             national_alert.set()

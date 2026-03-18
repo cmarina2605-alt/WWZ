@@ -1,8 +1,8 @@
 """
-app.py — Ventana principal de la aplicación Tkinter.
+app.py — Main Tkinter application window.
 
-App es el Tk root window que orquesta todos los widgets visuales
-y actúa de puente entre la UI y el Engine de simulación.
+App is the Tk root window that orchestrates all visual widgets
+and acts as a bridge between the UI and the simulation Engine.
 
 Layout:
     ┌─────────────────────────┬───────────────────────┐
@@ -11,19 +11,19 @@ Layout:
     │                         │  EventLog             │
     └─────────────────────────┴───────────────────────┘
 
-Loop de UI (cada UI_REFRESH_MS = 100 ms):
-    1. engine.get_snapshot() → obtiene el estado actual de forma thread-safe.
-    2. grid_canvas.render()  → pinta los agentes en el grid.
-    3. stats_panel.update()  → refresca contadores (humanos, zombis,
-       infectados, progreso del antídoto, tick, estrategia, resultado).
-    4. world.pop_events()    → consume y muestra eventos nuevos en el EventLog.
+UI loop (every UI_REFRESH_MS = 100 ms):
+    1. engine.get_snapshot() → gets the current state in a thread-safe manner.
+    2. grid_canvas.render()  → draws agents on the grid.
+    3. stats_panel.update()  → refreshes counters (humans, zombies,
+       infected, antidote progress, tick, strategy, result).
+    4. world.pop_events()    → consumes and displays new events in the EventLog.
 
-Acciones del usuario (llamadas desde ControlPanel):
-    action_start()     — inicia la simulación si no está en marcha.
-    action_pause()     — pausa / reanuda.
-    action_reset()     — reinicia el mundo y la UI.
-    action_run_batch() — lanza N simulaciones headless en un thread daemon
-                         y guarda los resultados en la base de datos.
+User actions (called from ControlPanel):
+    action_start()     — starts the simulation if not running.
+    action_pause()     — pauses / resumes.
+    action_reset()     — resets the world and UI.
+    action_run_batch() — launches N headless simulations in a daemon thread
+                         and saves results to the database.
 """
 
 import tkinter as tk
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 class App(tk.Tk):
     """
-    Ventana principal de la simulación Guerra Mundial J.
+    Main window for the Guerra Mundial J simulation.
 
     Layout:
         ┌─────────────────────────┬───────────────────────┐
@@ -47,27 +47,27 @@ class App(tk.Tk):
         │                         │  StatsPanel           │
         └─────────────────────────┴───────────────────────┘
 
-    El loop de actualización de la UI se ejecuta con self.after()
-    cada UI_REFRESH_MS milisegundos, llamando a update_ui().
+    The UI update loop runs via self.after() every UI_REFRESH_MS
+    milliseconds, calling update_ui().
 
     Attributes:
-        engine (Engine): Motor de simulación asociado.
-        grid_canvas (GridCanvas): Canvas del grid.
-        control_panel (ControlPanel): Panel de controles.
-        event_log (EventLog): Log de eventos.
-        stats_panel (StatsPanel): Panel de estadísticas.
+        engine (Engine): Associated simulation engine.
+        grid_canvas (GridCanvas): Grid canvas.
+        control_panel (ControlPanel): Controls panel.
+        event_log (EventLog): Event log.
+        stats_panel (StatsPanel): Statistics panel.
     """
 
     def __init__(self, engine: "Engine") -> None:
         """
-        Inicializa la ventana principal.
+        Initializes the main window.
 
         Args:
-            engine: Instancia del motor de simulación.
+            engine: Simulation engine instance.
         """
         super().__init__()
         self.engine: "Engine" = engine
-        self.title("⚠️  Guerra Mundial J — Simulación Humanos vs Zombis")
+        self.title("⚠️  Guerra Mundial J — Humans vs Zombies Simulation")
         self.geometry(f"{config.WINDOW_WIDTH}x{config.WINDOW_HEIGHT}")
         self.resizable(False, False)
         self.configure(bg="#1a1a2e")
@@ -76,24 +76,24 @@ class App(tk.Tk):
         self._start_ui_loop()
 
     # ------------------------------------------------------------------
-    # Construcción del layout
+    # Layout construction
     # ------------------------------------------------------------------
 
     def _build_layout(self) -> None:
-        """Construye el layout principal de la ventana."""
+        """Builds the main window layout."""
         from ui.grid_canvas import GridCanvas
         from ui.control_panel import ControlPanel
         from ui.event_log import EventLog
         from ui.stats_panel import StatsPanel
 
-        # Frame izquierdo: grid
+        # Left frame: grid
         left_frame = tk.Frame(self, bg="#1a1a2e", padx=5, pady=5)
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH)
 
         self.grid_canvas = GridCanvas(left_frame, size=config.CANVAS_SIZE)
         self.grid_canvas.pack()
 
-        # Frame derecho: controles + log + stats
+        # Right frame: controls + log + stats
         right_frame = tk.Frame(
             self,
             bg="#16213e",
@@ -114,101 +114,101 @@ class App(tk.Tk):
         self.event_log.pack(fill=tk.BOTH, expand=True)
 
     # ------------------------------------------------------------------
-    # Loop de UI
+    # UI loop
     # ------------------------------------------------------------------
 
     def _start_ui_loop(self) -> None:
-        """Inicia el loop de actualización de la UI."""
+        """Starts the UI update loop."""
         self.after(config.UI_REFRESH_MS, self._ui_loop)
 
     def _ui_loop(self) -> None:
         """
-        Callback periódico de actualización de la UI.
+        Periodic UI update callback.
 
-        Obtiene un snapshot del motor, lo pasa al GridCanvas para
-        renderizado y actualiza los paneles de stats y eventos.
+        Gets a snapshot from the engine, passes it to GridCanvas for
+        rendering, and updates the stats and event panels.
         """
         try:
             self.update_ui()
         except Exception as exc:
-            # No dejar que un error en la UI derribe la ventana
-            print(f"[UI] Error en update_ui: {exc}")
+            # Don't let a UI error bring down the window
+            print(f"[UI] Error in update_ui: {exc}")
         finally:
             self.after(config.UI_REFRESH_MS, self._ui_loop)
 
     def update_ui(self) -> None:
         """
-        Actualiza todos los componentes visuales con el estado actual.
+        Updates all visual components with the current state.
 
-        - Renderiza el grid con el snapshot del motor.
-        - Actualiza el panel de estadísticas.
-        - Muestra los nuevos eventos en el log.
+        - Renders the grid with the engine snapshot.
+        - Updates the statistics panel.
+        - Displays new events in the log.
         """
         snapshot = self.engine.get_snapshot()
 
-        # Renderizar grid
+        # Render grid
         self.grid_canvas.render(snapshot["grid"])
 
-        # Actualizar estadísticas
+        # Update statistics
         antidote_pct = snapshot.get("antidote_pct", 0)
         antidote_str = (
-            "¡LISTO!" if antidote_pct >= 100
+            "READY!" if antidote_pct >= 100
             else f"{antidote_pct}%"
         )
         strategy = snapshot.get("strategy", "none")
         strategy_labels = {
             "none":           "—",
-            "flee":           "EVACUACIÓN",
-            "group":          "AGRUPACIÓN",
-            "military_first": "OFENSIVA MILITAR",
-            "random":         "SIN PROTOCOLO",
+            "flee":           "EVACUATION",
+            "group":          "GROUPING",
+            "military_first": "MILITARY OFFENSIVE",
+            "random":         "NO PROTOCOL",
         }
         self.stats_panel.update({
             "n_humans": snapshot["n_humans"],
             "n_zombies": snapshot["n_zombies"],
             "infected": snapshot.get("infected", 0),
             "tick": snapshot["tick"],
-            "phase": snapshot.get("phase", "🧟 Brote"),
+            "phase": snapshot.get("phase", "🧟 Outbreak"),
             "strategy": strategy_labels.get(strategy, strategy),
             "antidote": antidote_str,
-            "result": snapshot["result"] or "En curso",
+            "result": snapshot["result"] or "In progress",
         })
 
-        # Mostrar eventos nuevos
+        # Display new events
         events = self.engine.world.pop_events()
         for event in events:
             self.event_log.add_event(event["description"])
 
     # ------------------------------------------------------------------
-    # Acciones de control (llamadas desde ControlPanel)
+    # Control actions (called from ControlPanel)
     # ------------------------------------------------------------------
 
     def action_start(self) -> None:
-        """Inicia la simulación si no está en marcha."""
+        """Starts the simulation if not already running."""
         if not self.engine.running:
             self.engine.start_simulation()
-            self.event_log.add_event("▶️ Simulación iniciada")
+            self.event_log.add_event("▶️ Simulation started")
 
     def action_pause(self) -> None:
-        """Pausa o reanuda la simulación."""
+        """Pauses or resumes the simulation."""
         self.engine.pause()
-        state = "⏸ Pausada" if self.engine.paused else "▶️ Reanudada"
+        state = "⏸ Paused" if self.engine.paused else "▶️ Resumed"
         self.event_log.add_event(state)
 
     def action_reset(self) -> None:
-        """Reinicia la simulación."""
+        """Resets the simulation."""
         self.engine.reset()
         self.grid_canvas.clear()
-        self.event_log.add_event("🔄 Simulación reiniciada")
+        self.event_log.add_event("🔄 Simulation reset")
 
     def action_run_batch(self, n: int = 100) -> None:
         """
-        Ejecuta n simulaciones en modo batch (sin UI intermedia).
+        Runs n simulations in batch mode (without intermediate UI).
 
-        Los resultados se guardan en la base de datos.
+        Results are saved to the database.
 
         Args:
-            n: Número de simulaciones a ejecutar.
+            n: Number of simulations to run.
         """
         from db.database import Database
         from db.stats import print_summary
@@ -217,13 +217,13 @@ class App(tk.Tk):
         def _batch():
             from simulation.engine import Engine
             db = Database()
-            self.event_log.add_event(f"🔁 Iniciando batch de {n} simulaciones...")
+            self.event_log.add_event(f"🔁 Starting batch of {n} simulations...")
             for i in range(n):
                 eng = Engine()
                 eng.start_simulation()
                 # Esperar a que termine
                 import time
-                timeout = 60  # segundos máximo por simulación
+                timeout = 60  # max seconds per simulation
                 start = time.time()
                 while eng.running and (time.time() - start) < timeout:
                     time.sleep(0.5)
@@ -239,9 +239,9 @@ class App(tk.Tk):
                     "tick_final": stats["tick"],
                 })
                 if (i + 1) % 10 == 0:
-                    self.event_log.add_event(f"  Completadas {i+1}/{n} simulaciones")
+                    self.event_log.add_event(f"  Completed {i+1}/{n} simulations")
             print_summary(db)
-            self.event_log.add_event(f"✅ Batch completado. Ver consola para resumen.")
+            self.event_log.add_event(f"✅ Batch complete. See console for summary.")
 
         t = threading.Thread(target=_batch, daemon=True)
         t.start()

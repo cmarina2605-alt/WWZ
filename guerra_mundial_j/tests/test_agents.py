@@ -1,30 +1,29 @@
 """
-test_agents.py — Tests unitarios para agentes (Human y Zombie).
+test_agents.py — Unit tests for agents (Human and Zombie).
 
-Verifica que las clases de agentes se comportan correctamente de forma
-aislada, sin necesidad de levantar una simulación completa.
+Verifies that agent classes behave correctly in isolation,
+without needing to run a full simulation.
 
-Suites de tests:
-    TestAgentInstantiation  — los agentes se crean con los atributos correctos,
-                              IDs únicos y fuerza clampeada a [0, 100].
-    TestGameOverRespect     — el thread del agente se detiene cuando game_over
-                              se activa, y no arranca si ya estaba activo.
-    TestMilitaryAttributes  — bonus de fuerza, consumo de munición y rol.
-    TestScientistAttributes — inteligencia, antidote_progress inicial y rol.
-    TestPoliticianAttributes — influencia, empatía alta por defecto y rol.
-    TestStateTransitions    — estados válidos se asignan; estados inválidos
-                              lanzan ValueError; infect() y die() funcionan.
+Test suites:
+    TestAgentInstantiation  — agents are created with correct attributes,
+                              unique IDs and force clamped to [0, 100].
+    TestGameOverRespect     — agent thread stops when game_over is set,
+                              and doesn't start if already active.
+    TestMilitaryAttributes  — strength bonus, ammo consumption and role.
+    TestScientistAttributes — intelligence, initial antidote_progress and role.
+    TestPoliticianAttributes — influence, high empathy by default and role.
+    TestStateTransitions    — valid states are assigned; invalid states
+                              raise ValueError; infect() and die() work.
 
-Los tests usan Worlds de tamaño 20×20 para ser rápidos y las señales
-globales (game_over, antidote_ready, national_alert) se limpian en setUp
-y se activan en tearDown para no dejar threads huérfanos entre tests.
+Tests use 20×20 Worlds for speed and global signals (game_over, antidote_ready,
+national_alert) are cleared in setUp and set in tearDown to avoid orphan threads.
 """
 
 import threading
 import time
 import unittest
 
-# Asegurar que los imports del proyecto funcionen
+# Ensure project imports work
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -37,29 +36,29 @@ from simulation.world import World
 
 
 def _make_world() -> World:
-    """Crea un World de tamaño reducido para tests."""
+    """Creates a small World for tests."""
     return World(size=20)
 
 
 def _place(agent, world: World) -> None:
-    """Coloca un agente en el mundo (encuentra celda libre)."""
+    """Places an agent in the world (finds a free cell)."""
     pos = world.find_free_cell()
     assert pos is not None
     world.place_agent(agent, pos)
 
 
 class TestAgentInstantiation(unittest.TestCase):
-    """Tests de instanciación básica."""
+    """Basic instantiation tests."""
 
     def setUp(self) -> None:
         game_over.clear()
         self.world = _make_world()
 
     def tearDown(self) -> None:
-        game_over.set()  # Detener cualquier thread vivo
+        game_over.set()  # Stop any live threads
 
     def test_human_normal_instantiation(self) -> None:
-        """Normal se instancia con los atributos correctos."""
+        """Normal is instantiated with correct attributes."""
         h = Normal(pos=(0, 0), world=self.world, force=60, age=25)
         self.assertEqual(h.role, "normal")
         self.assertEqual(h.force, 60)
@@ -69,7 +68,7 @@ class TestAgentInstantiation(unittest.TestCase):
         self.assertIsInstance(h, Human)
 
     def test_zombie_instantiation(self) -> None:
-        """Zombie se instancia con atributos correctos."""
+        """Zombie is instantiated with correct attributes."""
         z = Zombie(pos=(5, 5), world=self.world, force=70)
         self.assertEqual(z.state, "calm")
         self.assertIsNone(z.target_id)
@@ -77,14 +76,14 @@ class TestAgentInstantiation(unittest.TestCase):
         self.assertIsInstance(z, Zombie)
 
     def test_unique_ids(self) -> None:
-        """Cada agente tiene un ID único."""
+        """Each agent has a unique ID."""
         w = _make_world()
         agents = [Normal(pos=(i, 0), world=w) for i in range(5)]
         ids = [a.agent_id for a in agents]
-        self.assertEqual(len(ids), len(set(ids)), "IDs deben ser únicos")
+        self.assertEqual(len(ids), len(set(ids)), "IDs must be unique")
 
     def test_force_clamped(self) -> None:
-        """La fuerza se clampea a [0, 100]."""
+        """Force is clamped to [0, 100]."""
         h1 = Normal(pos=(0, 0), world=self.world, force=200)
         h2 = Normal(pos=(1, 0), world=self.world, force=-50)
         self.assertEqual(h1.force, 100)
@@ -92,7 +91,7 @@ class TestAgentInstantiation(unittest.TestCase):
 
 
 class TestGameOverRespect(unittest.TestCase):
-    """Tests de respeto al evento game_over en el bucle run()."""
+    """Tests for game_over event respect in the run() loop."""
 
     def setUp(self) -> None:
         game_over.clear()
@@ -101,9 +100,9 @@ class TestGameOverRespect(unittest.TestCase):
 
     def test_agent_stops_when_game_over(self) -> None:
         """
-        El agente debe detenerse al activar game_over.
+        Agent must stop when game_over is set.
 
-        El thread debe terminar en menos de 2 segundos tras activar game_over.
+        The thread must finish within 2 seconds after game_over is activated.
         """
         world = _make_world()
         z = Zombie(pos=(0, 0), world=world)
@@ -115,12 +114,12 @@ class TestGameOverRespect(unittest.TestCase):
         game_over.set()
         z.join(timeout=2.0)
 
-        self.assertFalse(z.is_alive(), "El agente debe haber terminado tras game_over")
+        self.assertFalse(z.is_alive(), "Agent must have stopped after game_over")
 
     def test_agent_does_not_start_if_game_over_set(self) -> None:
         """
-        Si game_over ya está activo al crear el agente, el bucle run()
-        debe terminar inmediatamente.
+        If game_over is already active when the agent is created,
+        the run() loop must terminate immediately.
         """
         game_over.set()
         world = _make_world()
@@ -134,7 +133,7 @@ class TestGameOverRespect(unittest.TestCase):
 
 
 class TestMilitaryAttributes(unittest.TestCase):
-    """Tests de atributos y comportamiento de Military."""
+    """Tests for Military attributes and behavior."""
 
     def setUp(self) -> None:
         game_over.clear()
@@ -144,14 +143,14 @@ class TestMilitaryAttributes(unittest.TestCase):
         game_over.set()
 
     def test_military_force_bonus(self) -> None:
-        """Military recibe bonus de fuerza de config.FORCE_MILITARY_BONUS."""
+        """Military receives strength bonus from config.FORCE_MILITARY_BONUS."""
         base_force = 40
         m = Military(pos=(0, 0), world=self.world, force=base_force)
         expected = min(100, base_force + config.FORCE_MILITARY_BONUS)
         self.assertEqual(m.force, expected)
 
     def test_military_has_ammo(self) -> None:
-        """Military tiene atributo ammo y puede consumirlo."""
+        """Military has ammo attribute and can consume it."""
         m = Military(pos=(0, 0), world=self.world, ammo=5)
         self.assertEqual(m.ammo, 5)
         result = m.use_ammo()
@@ -159,20 +158,20 @@ class TestMilitaryAttributes(unittest.TestCase):
         self.assertEqual(m.ammo, 4)
 
     def test_military_no_ammo(self) -> None:
-        """use_ammo() retorna False cuando no hay munición."""
+        """use_ammo() returns False when there is no ammo."""
         m = Military(pos=(0, 0), world=self.world, ammo=0)
         result = m.use_ammo()
         self.assertFalse(result)
 
     def test_military_role(self) -> None:
-        """Military tiene rol 'military'."""
+        """Military has role 'military'."""
         m = Military(pos=(0, 0), world=self.world)
         self.assertEqual(m.role, "military")
         self.assertIsInstance(m, Human)
 
 
 class TestScientistAttributes(unittest.TestCase):
-    """Tests de atributos y comportamiento de Scientist."""
+    """Tests for Scientist attributes and behavior."""
 
     def setUp(self) -> None:
         game_over.clear()
@@ -182,29 +181,29 @@ class TestScientistAttributes(unittest.TestCase):
         game_over.set()
 
     def test_scientist_has_intelligence(self) -> None:
-        """Scientist tiene atributo intelligence."""
+        """Scientist has intelligence attribute."""
         s = Scientist(pos=(0, 0), world=self.world, intelligence=85)
         self.assertEqual(s.intelligence, 85)
 
     def test_scientist_role(self) -> None:
-        """Scientist tiene rol 'scientist'."""
+        """Scientist has role 'scientist'."""
         s = Scientist(pos=(0, 0), world=self.world)
         self.assertEqual(s.role, "scientist")
 
     def test_scientist_antidote_progress(self) -> None:
-        """Scientist comienza con progreso de antídoto en 0."""
+        """Scientist starts with antidote progress at 0."""
         s = Scientist(pos=(0, 0), world=self.world)
         self.assertEqual(s.antidote_progress, 0)
         self.assertFalse(s.in_lab)
 
     def test_scientist_intelligence_clamped(self) -> None:
-        """La inteligencia se clampea a [0, 100]."""
+        """Intelligence is clamped to [0, 100]."""
         s = Scientist(pos=(0, 0), world=self.world, intelligence=150)
         self.assertEqual(s.intelligence, 100)
 
 
 class TestPoliticianAttributes(unittest.TestCase):
-    """Tests de atributos de Politician."""
+    """Tests for Politician attributes."""
 
     def setUp(self) -> None:
         game_over.clear()
@@ -214,23 +213,23 @@ class TestPoliticianAttributes(unittest.TestCase):
         game_over.set()
 
     def test_politician_has_influence(self) -> None:
-        """Politician tiene atributo influence."""
+        """Politician has influence attribute."""
         p = Politician(pos=(0, 0), world=self.world, influence=90)
         self.assertEqual(p.influence, 90)
 
     def test_politician_role(self) -> None:
-        """Politician tiene rol 'politician'."""
+        """Politician has role 'politician'."""
         p = Politician(pos=(0, 0), world=self.world)
         self.assertEqual(p.role, "politician")
 
     def test_politician_high_empathy(self) -> None:
-        """Politician tiene empatía alta por defecto."""
+        """Politician has high empathy by default."""
         p = Politician(pos=(0, 0), world=self.world)
         self.assertGreaterEqual(p.empathy, 70)
 
 
 class TestStateTransitions(unittest.TestCase):
-    """Tests de transiciones de estado."""
+    """Tests for state transitions."""
 
     def setUp(self) -> None:
         game_over.clear()
@@ -240,26 +239,26 @@ class TestStateTransitions(unittest.TestCase):
         game_over.set()
 
     def test_valid_state_transitions(self) -> None:
-        """Los estados válidos se asignan correctamente."""
+        """Valid states are assigned correctly."""
         h = Normal(pos=(0, 0), world=self.world)
         for state in ("calm", "running", "fighting", "infected", "dead"):
             h.set_state(state)
             self.assertEqual(h.state, state)
 
     def test_invalid_state_raises(self) -> None:
-        """Un estado inválido lanza ValueError."""
+        """An invalid state raises ValueError."""
         h = Normal(pos=(0, 0), world=self.world)
         with self.assertRaises(ValueError):
             h.set_state("zombie_mode")
 
     def test_infect_changes_state(self) -> None:
-        """Human.infect() cambia el estado a 'infected'."""
+        """Human.infect() changes state to 'infected'."""
         h = Normal(pos=(0, 0), world=self.world)
         h.infect()
         self.assertEqual(h.state, "infected")
 
     def test_die_marks_agent_dead(self) -> None:
-        """Agent.die() marca al agente como muerto."""
+        """Agent.die() marks the agent as dead."""
         world = _make_world()
         h = Normal(pos=(3, 3), world=world)
         world.place_agent(h, (3, 3))

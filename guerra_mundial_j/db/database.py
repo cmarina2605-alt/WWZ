@@ -1,25 +1,25 @@
 """
-database.py — Capa de acceso a datos SQLite para la simulación.
+database.py — SQLite data access layer for the simulation.
 
-La clase Database es un wrapper thread-safe sobre sqlite3 que encapsula
-todas las operaciones CRUD sobre simulations.db. Todos los métodos
-adquieren un threading.Lock interno antes de acceder a la conexión,
-por lo que puede llamarse desde múltiples threads sin riesgo de corrupción.
+The Database class is a thread-safe wrapper over sqlite3 that encapsulates
+all CRUD operations on simulations.db. All methods acquire an internal
+threading.Lock before accessing the connection, so it can be called from
+multiple threads without risk of corruption.
 
-Métodos de escritura:
-    save_simulation(data)           — inserta una simulación, retorna su ID.
-    save_event(sim_id, type, tick, desc) — añade un evento a una simulación.
-    update_simulation_result(...)   — actualiza resultado, duración y conteos
-                                      finales cuando la simulación termina.
+Write methods:
+    save_simulation(data)           — inserts a simulation, returns its ID.
+    save_event(sim_id, type, tick, desc) — adds an event to a simulation.
+    update_simulation_result(...)   — updates result, duration and final
+                                      counts when the simulation ends.
 
-Métodos de lectura:
-    get_all_simulations()           — todas las simulaciones, más reciente primero.
-    load_simulation(seed)           — simulación más reciente con ese seed.
-    get_events(sim_id)              — eventos de una simulación, ordenados por tick.
-    get_simulation_count()          — número total de simulaciones en la DB.
+Read methods:
+    get_all_simulations()           — all simulations, most recent first.
+    load_simulation(seed)           — most recent simulation with that seed.
+    get_events(sim_id)              — events of a simulation, ordered by tick.
+    get_simulation_count()          — total number of simulations in the DB.
 
-Uso típico:
-    db = Database()           # abre/crea simulations.db
+Typical usage:
+    db = Database()           # opens/creates simulations.db
     sim_id = db.save_simulation({...})
     db.save_event(sim_id, "antidote", tick=420, description="...")
     db.close()
@@ -43,23 +43,23 @@ from db.models import (
 
 class Database:
     """
-    Clase de acceso a la base de datos SQLite de la simulación.
+    SQLite database access class for the simulation.
 
-    Gestiona la conexión y provee métodos CRUD de alto nivel para
-    simulations y events. Thread-safe gracias a un Lock interno.
+    Manages the connection and provides high-level CRUD methods for
+    simulations and events. Thread-safe thanks to an internal Lock.
 
     Attributes:
-        db_path (str): Ruta al fichero SQLite (":memory:" para tests).
-        _conn (sqlite3.Connection): Conexión activa.
-        _lock (threading.Lock): Protege accesos concurrentes.
+        db_path (str): Path to the SQLite file (":memory:" for tests).
+        _conn (sqlite3.Connection): Active connection.
+        _lock (threading.Lock): Protects concurrent access.
     """
 
     def __init__(self, db_path: str = config.DB_PATH) -> None:
         """
-        Inicializa la base de datos y crea las tablas si no existen.
+        Initializes the database and creates tables if they don't exist.
 
         Args:
-            db_path: Ruta al fichero .db. Usa ":memory:" para tests.
+            db_path: Path to the .db file. Use ":memory:" for tests.
         """
         self.db_path: str = db_path
         self._lock: threading.Lock = threading.Lock()
@@ -71,18 +71,18 @@ class Database:
         self.init_db()
 
     # ------------------------------------------------------------------
-    # Inicialización
+    # Initialization
     # ------------------------------------------------------------------
 
     def init_db(self) -> None:
         """
-        Crea las tablas e índices si no existen todavía.
+        Creates tables and indexes if they don't exist yet.
 
-        Ejecuta el SCHEMA_SQL completo de models.py.
+        Runs the full SCHEMA_SQL from models.py.
         """
         with self._lock:
             cursor = self._conn.cursor()
-            # Ejecutar sentencias individuales (executescript ignora params)
+            # Execute individual statements (executescript ignores params)
             for statement in SCHEMA_SQL.split(";"):
                 stmt = statement.strip()
                 if stmt:
@@ -90,28 +90,28 @@ class Database:
             self._conn.commit()
 
     # ------------------------------------------------------------------
-    # Escritura
+    # Write methods
     # ------------------------------------------------------------------
 
     def save_simulation(self, data: Dict[str, Any]) -> int:
         """
-        Guarda los datos de una simulación y retorna su ID.
+        Saves simulation data and returns its ID.
 
         Args:
-            data: Diccionario con los campos de la tabla simulations.
-                  Claves esperadas: seed, p_infect, vision_human,
+            data: Dict with simulations table fields.
+                  Expected keys: seed, p_infect, vision_human,
                   vision_zombie, strategy, n_scientists, n_military,
                   n_politicians, result, duration, humans_final,
                   zombies_final, tick_final.
 
         Returns:
-            int: ID asignado a la simulación guardada.
+            int: ID assigned to the saved simulation.
         """
-        # Añadir timestamp si no viene en data
+        # Add timestamp if not in data
         if "timestamp" not in data:
             data["timestamp"] = datetime.now(timezone.utc).isoformat()
 
-        # Valores por defecto para campos opcionales
+        # Default values for optional fields
         defaults: Dict[str, Any] = {
             "vision_human": config.VISION_HUMAN,
             "vision_zombie": config.VISION_ZOMBIE,
@@ -141,13 +141,13 @@ class Database:
         description: str,
     ) -> None:
         """
-        Guarda un evento asociado a una simulación.
+        Saves an event associated with a simulation.
 
         Args:
-            sim_id: ID de la simulación a la que pertenece el evento.
-            event_type: Tipo de evento (e.g. "infection", "death").
-            tick: Tick en que ocurrió el evento.
-            description: Descripción legible del evento.
+            sim_id: ID of the simulation the event belongs to.
+            event_type: Event type (e.g. "infection", "death").
+            tick: Tick when the event occurred.
+            description: Human-readable description of the event.
         """
         with self._lock:
             cursor = self._conn.cursor()
@@ -164,15 +164,15 @@ class Database:
         tick_final: int,
     ) -> None:
         """
-        Actualiza el resultado de una simulación ya guardada.
+        Updates the result of an already saved simulation.
 
         Args:
-            sim_id: ID de la simulación.
+            sim_id: Simulation ID.
             result: "humans_win" | "zombies_win".
-            duration: Duración en segundos.
-            humans_final: Humanos vivos al final.
-            zombies_final: Zombis al final.
-            tick_final: Tick en que terminó.
+            duration: Duration in seconds.
+            humans_final: Living humans at the end.
+            zombies_final: Zombies at the end.
+            tick_final: Tick when it ended.
         """
         sql = """
             UPDATE simulations
@@ -188,15 +188,15 @@ class Database:
             self._conn.commit()
 
     # ------------------------------------------------------------------
-    # Lectura
+    # Read methods
     # ------------------------------------------------------------------
 
     def get_all_simulations(self) -> List[Dict[str, Any]]:
         """
-        Retorna todas las simulaciones guardadas, ordenadas por fecha.
+        Returns all saved simulations, ordered by date.
 
         Returns:
-            Lista de dicts con los datos de cada simulación.
+            List of dicts with each simulation's data.
         """
         with self._lock:
             cursor = self._conn.execute(SELECT_ALL_SIMULATIONS)
@@ -204,13 +204,13 @@ class Database:
 
     def load_simulation(self, seed: int) -> Optional[Dict[str, Any]]:
         """
-        Carga la simulación más reciente con el seed dado.
+        Loads the most recent simulation with the given seed.
 
         Args:
-            seed: Semilla aleatoria a buscar.
+            seed: Random seed to search for.
 
         Returns:
-            Dict con los datos de la simulación, o None si no existe.
+            Dict with simulation data, or None if not found.
         """
         with self._lock:
             cursor = self._conn.execute(SELECT_SIMULATION_BY_SEED, (seed,))
@@ -219,13 +219,13 @@ class Database:
 
     def get_events(self, sim_id: int) -> List[Dict[str, Any]]:
         """
-        Retorna todos los eventos de una simulación.
+        Returns all events of a simulation.
 
         Args:
-            sim_id: ID de la simulación.
+            sim_id: Simulation ID.
 
         Returns:
-            Lista de dicts con los eventos, ordenados por tick.
+            List of event dicts, ordered by tick.
         """
         with self._lock:
             cursor = self._conn.execute(SELECT_EVENTS_BY_SIM, (sim_id,))
@@ -233,21 +233,21 @@ class Database:
 
     def get_simulation_count(self) -> int:
         """
-        Retorna el número total de simulaciones guardadas.
+        Returns the total number of saved simulations.
 
         Returns:
-            int: Número de filas en la tabla simulations.
+            int: Number of rows in the simulations table.
         """
         with self._lock:
             cursor = self._conn.execute("SELECT COUNT(*) FROM simulations")
             return cursor.fetchone()[0]
 
     # ------------------------------------------------------------------
-    # Limpieza
+    # Cleanup
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Cierra la conexión a la base de datos."""
+        """Closes the database connection."""
         with self._lock:
             self._conn.close()
 

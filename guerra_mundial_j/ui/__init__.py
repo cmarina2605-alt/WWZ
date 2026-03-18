@@ -1,22 +1,22 @@
 """
-ui — Paquete de interfaz gráfica Tkinter de la simulación.
+ui — Tkinter graphical interface package for the simulation.
 
-Contiene todos los componentes visuales que permiten observar y controlar
-la simulación en tiempo real. El loop de UI se actualiza cada UI_REFRESH_MS
-milisegundos mediante Tkinter's after(), consumiendo snapshots del Engine.
+Contains all visual components for observing and controlling the simulation
+in real time. The UI loop updates every UI_REFRESH_MS milliseconds via
+Tkinter's after(), consuming Engine snapshots.
 
-Componentes:
-    app.py          — App (Tk root): ventana principal, layout y loop de UI.
-                      Conecta el Engine con los widgets visuales.
-    grid_canvas.py  — GridCanvas: dibuja el grid 100×100 con un rectángulo
-                      de color por cada agente. Incluye leyenda y marcadores
-                      de zonas clave (LAB, Casa Blanca, Base Militar).
-    control_panel.py — ControlPanel: botones Start/Pause/Reset/Batch y
-                      sliders para ajustar parámetros en tiempo real.
-    stats_panel.py  — StatsPanel: panel de estadísticas en tiempo real
-                      (humanos, zombis, infectados, antídoto, tick, estrategia).
-    event_log.py    — EventLog: log scrolleable de eventos con timestamp
-                      y colores por tipo (muerte, infección, alerta, etc.).
+Components:
+    app.py           — App (Tk root): main window, layout, and UI loop.
+                       Connects the Engine with visual widgets.
+    grid_canvas.py   — GridCanvas: draws the 100×100 grid with a colored
+                       rectangle per agent. Includes legend and key zone
+                       markers (LAB, White House, Military Base).
+    control_panel.py — ControlPanel: Start/Pause/Reset/Batch buttons and
+                       sliders for real-time parameter adjustment.
+    stats_panel.py   — StatsPanel: real-time statistics panel
+                       (humans, zombies, infected, antidote, tick, strategy).
+    event_log.py     — EventLog: scrollable event log with timestamps
+                       and colors by type (death, infection, alert, etc.).
 """
 
 from ui.app import App

@@ -1,23 +1,23 @@
 """
-models.py — Definición del esquema de base de datos SQLite.
+models.py — SQLite database schema definition.
 
-Centraliza todas las sentencias SQL del proyecto en un único lugar:
-CREATE TABLE, CREATE INDEX, INSERT y SELECT. Así database.py no
-contiene SQL inline y los cambios de esquema se hacen aquí.
+Centralizes all SQL statements in the project in one place:
+CREATE TABLE, CREATE INDEX, INSERT and SELECT. This way database.py does not
+contain inline SQL and schema changes are made here.
 
-Tabla `simulations` — una fila por ejecución de simulación:
+Table `simulations` — one row per simulation run:
     id, seed, p_infect, vision_human, vision_zombie, strategy,
     n_scientists, n_military, n_politicians, result, duration,
     humans_final, zombies_final, tick_final, timestamp.
 
-Tabla `events` — eventos clave ocurridos durante una simulación:
+Table `events` — key events that occurred during a simulation:
     id, sim_id (FK → simulations), event_type, tick, description.
-    Tipos: 'infection' | 'death' | 'escape' | 'zombie_death' |
+    Types: 'infection' | 'death' | 'escape' | 'zombie_death' |
            'antidote' | 'alert' | 'outbreak'.
 
-Queries de análisis incluidas:
-    SELECT_WIN_RATE_BY_STRATEGY  — win rate agrupado por estrategia.
-    SELECT_SENSITIVITY_P_INFECT  — win rate agrupado por buckets de p_infect.
+Analysis queries included:
+    SELECT_WIN_RATE_BY_STRATEGY  — win rate grouped by strategy.
+    SELECT_SENSITIVITY_P_INFECT  — win rate grouped by p_infect buckets.
 """
 
 # ---------------------------------------------------------------------------
@@ -41,11 +41,11 @@ CREATE TABLE IF NOT EXISTS simulations (
     n_scientists    INTEGER NOT NULL,
     n_military      INTEGER NOT NULL,
     n_politicians   INTEGER NOT NULL,
-    result          TEXT,           -- 'humans_win' | 'zombies_win' | NULL si en curso
-    duration        REAL,           -- segundos de duración
-    humans_final    INTEGER,        -- humanos vivos al final
-    zombies_final   INTEGER,        -- zombis al final
-    tick_final      INTEGER,        -- tick en que terminó
+    result          TEXT,           -- 'humans_win' | 'zombies_win' | NULL if in progress
+    duration        REAL,           -- duration in seconds
+    humans_final    INTEGER,        -- living humans at the end
+    zombies_final   INTEGER,        -- zombies at the end
+    tick_final      INTEGER,        -- tick when it ended
     timestamp       TEXT NOT NULL   -- ISO 8601
 );
 """
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS events (
 """
 
 # ---------------------------------------------------------------------------
-# Índices para consultas frecuentes
+# Indexes for frequent queries
 # ---------------------------------------------------------------------------
 
 CREATE_INDEXES = """
@@ -72,7 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_simulations_result ON simulations(result);
 """
 
 # ---------------------------------------------------------------------------
-# SQL agrupado para inicialización
+# Grouped SQL for initialization
 # ---------------------------------------------------------------------------
 
 SCHEMA_SQL: str = "\n".join([
@@ -82,7 +82,7 @@ SCHEMA_SQL: str = "\n".join([
 ])
 
 # ---------------------------------------------------------------------------
-# Queries de inserción (parametrizadas)
+# Insert queries (parameterized)
 # ---------------------------------------------------------------------------
 
 INSERT_SIMULATION = """
@@ -102,7 +102,7 @@ VALUES (?, ?, ?, ?);
 """
 
 # ---------------------------------------------------------------------------
-# Queries de consulta
+# Select queries
 # ---------------------------------------------------------------------------
 
 SELECT_ALL_SIMULATIONS = """

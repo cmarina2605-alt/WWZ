@@ -1,22 +1,22 @@
 """
-zombie.py — Clase Zombie para la simulación Guerra Mundial J.
+zombie.py — Zombie class for the Guerra Mundial J simulation.
 
-En el universo de la simulación, los zombis son copias del Profe José:
-resultado del experimento fallido que desató el apocalipsis.
+In the simulation universe, zombies are copies of Professor José:
+the result of the failed experiment that unleashed the apocalypse.
 
-Comportamiento por tick:
-    1. El hambre (hunger) aumenta cada tick; a más hambre, más velocidad.
-    2. Busca el humano vivo más cercano dentro de VISION_ZOMBIE celdas.
-    3. Si lo encuentra, lo persigue (move_towards) y ataca al contacto
-       (distancia ≤ 1.5): delega en combat.resolve_encounter().
-    4. Si no hay humano visible, hace random walk.
+Per-tick behavior:
+    1. Hunger increases each tick; the hungrier, the faster.
+    2. Searches for the nearest living human within VISION_ZOMBIE cells.
+    3. If found, chases it (move_towards) and attacks on contact
+       (distance ≤ 1.5): delegates to combat.resolve_encounter().
+    4. If no human is visible, performs a random walk.
 
-Sistema de targeting:
-    - Guarda target_id para mantener el objetivo entre ticks.
-    - Si el objetivo desaparece (muerto, huido o fuera de rango), retargetea.
+Targeting system:
+    - Stores target_id to maintain the target between ticks.
+    - If the target disappears (dead, fled, or out of range), retargets.
 
-La conversión de humanos infectados NO ocurre aquí; la gestiona el
-InfectionMonitor del Engine para evitar race conditions al crear nuevos threads.
+The conversion of infected humans does NOT happen here; it is managed by the
+Engine's InfectionMonitor to avoid race conditions when creating new threads.
 """
 
 import random
@@ -32,13 +32,13 @@ if TYPE_CHECKING:
 
 class Zombie(Agent):
     """
-    Agente zombi que persigue y ataca humanos.
+    Zombie agent that chases and attacks humans.
 
     Attributes:
-        target_id (Optional[int]): ID del humano objetivo actual.
-        infection_count (int): Número de humanos infectados por este zombi.
-        hunger (int): Nivel de hambre (0-100); aumenta con el tiempo,
-            disminuye al atacar. Afecta la velocidad de movimiento.
+        target_id (Optional[int]): ID of the current target human.
+        infection_count (int): Number of humans infected by this zombie.
+        hunger (int): Hunger level (0-100); increases over time,
+            decreases when attacking. Affects movement speed.
     """
 
     def __init__(
@@ -49,45 +49,45 @@ class Zombie(Agent):
         age: int = 25,
     ) -> None:
         """
-        Inicializa un zombi.
+        Initializes a zombie.
 
         Args:
-            pos: Posición inicial (x, y).
-            world: Referencia al mundo compartido.
-            force: Fuerza inicial del zombi (0-100).
-            age: Edad aparente del zombi.
+            pos: Initial position (x, y).
+            world: Reference to the shared world.
+            force: Initial zombie strength (0-100).
+            age: Apparent age of the zombie.
         """
-        self.hunger: int = 50  # Debe inicializarse ANTES de super() (usado en _calculate_move_delay)
+        self.hunger: int = 50  # Must be initialized BEFORE super() (used in _calculate_move_delay)
         super().__init__(pos=pos, world=world, force=force, age=age)
         self.target_id: Optional[int] = None
         self.infection_count: int = 0
         self.set_state("calm")
 
     # ------------------------------------------------------------------
-    # Lógica principal
+    # Main logic
     # ------------------------------------------------------------------
 
     def update(self) -> None:
         """
-        Lógica de actualización por tick del zombi.
+        Per-tick update logic for the zombie.
 
-        1. Aumenta el hambre ligeramente cada tick.
-        2. Busca el humano más cercano en rango de visión.
-        3. Si lo encuentra, persigue y ataca al contacto.
-        4. Si no hay objetivo visible, hace random walk.
+        1. Increases hunger slightly each tick.
+        2. Searches for the nearest human within vision range.
+        3. If found, chases and attacks on contact.
+        4. If no target visible, performs random walk.
         """
         from simulation import movement, combat
 
         if not self.is_alive():
             return
 
-        # Aumentar hambre gradualmente
+        # Gradually increase hunger
         self.hunger = min(100, self.hunger + 1)
 
-        # Recalcular velocidad según hambre
+        # Recalculate speed based on hunger
         self.move_delay = self._calculate_move_delay()
 
-        # Buscar objetivo
+        # Find target
         target = self._find_nearest_human()
 
         if target is not None:
@@ -101,10 +101,10 @@ class Zombie(Agent):
 
     def _find_nearest_human(self) -> Optional["Human"]:
         """
-        Busca el humano vivo más cercano dentro del rango de visión.
+        Searches for the nearest living human within vision range.
 
         Returns:
-            El agente humano más cercano, o None si no hay ninguno visible.
+            The nearest human agent, or None if none is visible.
         """
         from agents.human import Human
 
@@ -121,47 +121,47 @@ class Zombie(Agent):
 
     def _pursue_and_attack(self, target: "Human", combat, movement) -> None:
         """
-        Persigue al objetivo y ataca si está en contacto.
+        Pursues the target and attacks if in contact.
 
         Args:
-            target: Humano objetivo.
-            combat: Módulo de combate.
-            movement: Módulo de movimiento.
+            target: Target human.
+            combat: Combat module.
+            movement: Movement module.
         """
         dist = self.distance_to(target.pos)
 
         if dist <= 1.5:
-            # En contacto: resolver encuentro
+            # In contact: resolve encounter
             self.set_state("fighting")
             combat.resolve_encounter(target, self, self.world)
             self.hunger = max(0, self.hunger - 30)
             self.infection_count += 1
         else:
-            # Perseguir
+            # Chase
             self.set_state("calm")
             next_pos = movement.move_towards(self.pos, target.pos, self.world)
             self.world.move_agent(self, next_pos)
 
     def _calculate_move_delay(self) -> float:
         """
-        Calcula el retardo de movimiento.
+        Calculates the movement delay.
 
-        Los zombis más hambrientos se mueven ligeramente más rápido.
+        Hungrier zombies move slightly faster.
 
         Returns:
-            float: Segundos de espera entre ticks.
+            float: Wait seconds between ticks.
         """
         base = super()._calculate_move_delay()
-        # El hambre reduce el delay (hasta 20% más rápido)
+        # Hunger reduces delay (up to 20% faster)
         hunger_factor = 1.0 - (self.hunger / 500.0)
         return max(0.05, base * hunger_factor)
 
     # ------------------------------------------------------------------
-    # Representación visual
+    # Visual representation
     # ------------------------------------------------------------------
 
     def get_color(self) -> str:
-        """Retorna el color del zombi para la UI."""
+        """Returns the zombie's color for the UI."""
         if self.state == "dead":
             return config.COLOR_DEAD
         return config.COLOR_ZOMBIE

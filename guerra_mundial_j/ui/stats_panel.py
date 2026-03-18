@@ -1,22 +1,22 @@
 """
-stats_panel.py — Panel de estadísticas en tiempo real.
+stats_panel.py — Real-time statistics panel.
 
-Muestra en tiempo real los indicadores clave de la simulación,
-refrescándose cada UI_REFRESH_MS milisegundos desde app.py.
+Displays key simulation indicators in real time,
+refreshing every UI_REFRESH_MS milliseconds from app.py.
 
-Estadísticas mostradas:
-    🧍 Humanos    — número de humanos vivos (verde).
-    🧟 Zombis     — número de zombis activos (amarillo).
-    🟠 Infectados — humanos en período de incubación (naranja).
-    ⏱  Tick       — tick global de la simulación (azul clarito).
-    ⚙  Estrategia — estrategia humana activa: flee/group/military_first/random.
-    💉 Antídoto   — progreso del científico más avanzado en el lab (0%–¡LISTO!).
-    🏁 Estado     — resultado: "En curso", "humans_win" o "zombies_win".
+Statistics shown:
+    🧍 Humans    — number of living humans (green).
+    🧟 Zombies   — number of active zombies (yellow).
+    🟠 Infected  — humans in incubation period (orange).
+    ⏱  Tick      — global simulation tick (light blue).
+    ⚙  Protocol  — active human strategy: flee/group/military_first/random.
+    💉 Antidote  — progress of the most advanced scientist in the lab (0%–READY!).
+    🏁 Status    — result: "In progress", "humans_win" or "zombies_win".
 
-Implementación:
-    Cada fila es un par (Label estático, Label con tk.StringVar).
-    update(stats_dict) actualiza las StringVars con los valores recibidos.
-    reset() pone todos los valores a "—" (usado tras Reset de simulación).
+Implementation:
+    Each row is a pair (static Label, Label with tk.StringVar).
+    update(stats_dict) updates the StringVars with the received values.
+    reset() sets all values to "—" (used after simulation Reset).
 """
 
 import tkinter as tk
@@ -25,54 +25,54 @@ from typing import Dict, Any
 
 class StatsPanel(tk.Frame):
     """
-    Panel de estadísticas de la simulación en tiempo real.
+    Real-time simulation statistics panel.
 
-    Muestra etiquetas que se actualizan con cada llamada a update().
+    Displays labels that update with each call to update().
 
-    Estadísticas mostradas:
-        - Humanos vivos
-        - Zombis activos
-        - Infectados
-        - Tick actual
-        - Estrategia activa
-        - Resultado (si la simulación terminó)
+    Statistics shown:
+        - Living humans
+        - Active zombies
+        - Infected
+        - Current tick
+        - Active strategy
+        - Result (if simulation ended)
 
     Attributes:
-        _vars (Dict[str, tk.StringVar]): Variables Tkinter enlazadas
-            a cada etiqueta de valor.
+        _vars (Dict[str, tk.StringVar]): Tkinter variables bound
+            to each value label.
     """
 
     STAT_DEFS = [
-        ("n_humans",  "🧍 Humanos",      "#00ff88"),
-        ("n_zombies", "🧟 Zombis",        "#ffff00"),
-        ("infected",  "🟠 Infectados",    "#ffa500"),
-        ("tick",      "⏱  Tick",          "#87ceeb"),
-        ("phase",     "📍 Fase",           "#ff9944"),
-        ("strategy",  "⚙  Protocolo",     "#da70d6"),
-        ("antidote",  "💉 Antídoto",      "#00cfff"),
-        ("result",    "🏁 Estado",         "#ffffff"),
+        ("n_humans",  "🧍 Humans",    "#00ff88"),
+        ("n_zombies", "🧟 Zombies",   "#ffff00"),
+        ("infected",  "🟠 Infected",  "#ffa500"),
+        ("tick",      "⏱  Tick",      "#87ceeb"),
+        ("phase",     "📍 Phase",     "#ff9944"),
+        ("strategy",  "⚙  Protocol", "#da70d6"),
+        ("antidote",  "💉 Antidote",  "#00cfff"),
+        ("result",    "🏁 Status",    "#ffffff"),
     ]
 
     def __init__(self, parent: tk.Widget) -> None:
         """
-        Inicializa el panel de estadísticas.
+        Initializes the statistics panel.
 
         Args:
-            parent: Widget padre de Tkinter.
+            parent: Tkinter parent widget.
         """
         super().__init__(parent, bg="#16213e", padx=5, pady=5)
         self._vars: Dict[str, tk.StringVar] = {}
         self._build_layout()
 
     # ------------------------------------------------------------------
-    # Construcción
+    # Construction
     # ------------------------------------------------------------------
 
     def _build_layout(self) -> None:
-        """Construye las filas de etiquetas de estadísticas."""
+        """Builds the statistics label rows."""
         title = tk.Label(
             self,
-            text="📊 ESTADÍSTICAS",
+            text="📊 STATISTICS",
             bg="#16213e",
             fg="#58a6ff",
             font=("Consolas", 9, "bold"),
@@ -81,7 +81,7 @@ class StatsPanel(tk.Frame):
         title.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 4))
 
         for i, (key, label, color) in enumerate(self.STAT_DEFS, start=1):
-            # Etiqueta del campo
+            # Field label
             tk.Label(
                 self,
                 text=f"{label}:",
@@ -92,7 +92,7 @@ class StatsPanel(tk.Frame):
                 width=16,
             ).grid(row=i, column=0, sticky="w", pady=1)
 
-            # Variable y etiqueta de valor
+            # Value variable and label
             var = tk.StringVar(value="—")
             self._vars[key] = var
             tk.Label(
@@ -107,18 +107,18 @@ class StatsPanel(tk.Frame):
         self.columnconfigure(1, weight=1)
 
     # ------------------------------------------------------------------
-    # API pública
+    # Public API
     # ------------------------------------------------------------------
 
     def update(self, stats: Dict[str, Any]) -> None:
         """
-        Refresca todos los valores del panel.
+        Refreshes all panel values.
 
-        Acepta un dict con cualquier subconjunto de las claves
-        definidas en STAT_DEFS; las claves ausentes no se modifican.
+        Accepts a dict with any subset of keys defined in STAT_DEFS;
+        missing keys are not modified.
 
         Args:
-            stats: Dict con los valores actualizados. Claves esperadas:
+            stats: Dict with updated values. Expected keys:
                    n_humans, n_zombies, infected, tick, strategy, result.
 
         Example:
@@ -127,7 +127,7 @@ class StatsPanel(tk.Frame):
             ...     "n_zombies": 14,
             ...     "tick": 342,
             ...     "strategy": "flee",
-            ...     "result": "En curso",
+            ...     "result": "In progress",
             ... })
         """
         for key, var in self._vars.items():
@@ -136,6 +136,6 @@ class StatsPanel(tk.Frame):
                 var.set(str(value) if value is not None else "—")
 
     def reset(self) -> None:
-        """Resetea todos los valores a "—"."""
+        """Resets all values to "—"."""
         for var in self._vars.values():
             var.set("—")

@@ -1,31 +1,31 @@
 """
-stats.py — Análisis estadístico de los resultados de simulaciones.
+stats.py — Statistical analysis of simulation results.
 
-Funciones de alto nivel que consultan la base de datos para extraer
-conclusiones sobre qué configuraciones favorecen a humanos o zombis.
+High-level functions that query the database to draw conclusions about
+which configurations favor humans or zombies.
 
-Funciones principales:
+Main functions:
     analyze_strategies(db)
         → Dict {strategy: {total, human_wins, win_rate_pct}}
-        Responde: ¿qué estrategia humana tiene mayor tasa de victoria?
+        Answers: which human strategy has the highest win rate?
 
     sensitivity_analysis(param, db)
         → List [{value, total, win_rate_pct}]
-        Responde: ¿cómo varía el resultado al cambiar p_infect o la visión?
-        Parámetros soportados: "p_infect", "vision_zombie", "vision_human".
+        Answers: how does the result vary when changing p_infect or vision?
+        Supported parameters: "p_infect", "vision_zombie", "vision_human".
 
     print_summary(db)
-        Imprime en consola un resumen formateado tras un run en modo batch.
-        Muestra: estrategias ordenadas por win_rate, sensibilidad a p_infect.
+        Prints a formatted summary to the console after a batch run.
+        Shows: strategies sorted by win_rate, sensitivity to p_infect.
 
     get_best_strategy(db)
-        → str | None  — nombre de la estrategia con mayor win_rate_pct.
+        → str | None  — name of the strategy with the highest win_rate_pct.
 
     get_recent_simulations(limit, db)
-        → List[Dict]  — las N simulaciones más recientes de la base de datos.
+        → List[Dict]  — the N most recent simulations from the database.
 
-Todas las funciones aceptan db=None y crean una instancia con la ruta
-por defecto si no se proporciona, para facilitar el uso desde la CLI.
+All functions accept db=None and create an instance with the default path
+if not provided, to facilitate use from the CLI.
 """
 
 from typing import Dict, List, Any, Optional
@@ -36,13 +36,13 @@ from db.models import SELECT_WIN_RATE_BY_STRATEGY, SELECT_SENSITIVITY_P_INFECT
 
 def analyze_strategies(db: Optional[Database] = None) -> Dict[str, Dict[str, Any]]:
     """
-    Analiza la tasa de victoria de cada estrategia registrada en la DB.
+    Analyzes the win rate of each strategy registered in the DB.
 
     Args:
-        db: Instancia de Database. Si es None, crea una con la ruta por defecto.
+        db: Database instance. If None, creates one with the default path.
 
     Returns:
-        Dict de {strategy: {"total": int, "human_wins": int, "win_rate_pct": float}}.
+        Dict of {strategy: {"total": int, "human_wins": int, "win_rate_pct": float}}.
 
     Example:
         >>> results = analyze_strategies()
@@ -72,25 +72,25 @@ def sensitivity_analysis(
     db: Optional[Database] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Analiza cómo varía el resultado según un parámetro dado.
+    Analyzes how the result varies according to a given parameter.
 
-    Parámetros soportados: "p_infect", "vision_zombie", "vision_human".
+    Supported parameters: "p_infect", "vision_zombie", "vision_human".
 
     Args:
-        param: Nombre del parámetro a analizar.
-        db: Instancia de Database. Si es None, usa la ruta por defecto.
+        param: Name of the parameter to analyze.
+        db: Database instance. If None, uses the default path.
 
     Returns:
-        Lista de dicts con {bucket_value, total, win_rate_pct} ordenados
-        por el valor del bucket.
+        List of dicts with {bucket_value, total, win_rate_pct} ordered
+        by the bucket value.
 
     Raises:
-        ValueError: Si el parámetro no está soportado.
+        ValueError: If the parameter is not supported.
     """
     supported = {"p_infect", "vision_zombie", "vision_human"}
     if param not in supported:
         raise ValueError(
-            f"Parámetro no soportado: '{param}'. Usa uno de: {supported}"
+            f"Unsupported parameter: '{param}'. Use one of: {supported}"
         )
 
     if db is None:
@@ -100,7 +100,7 @@ def sensitivity_analysis(
         query = SELECT_SENSITIVITY_P_INFECT
         bucket_col = "p_infect_bucket"
     else:
-        # Construcción dinámica para visión
+        # Dynamic construction for vision
         query = f"""
             SELECT
                 {param} AS bucket,
@@ -132,25 +132,24 @@ def sensitivity_analysis(
 
 def print_summary(db: Optional[Database] = None) -> None:
     """
-    Imprime un resumen de resultados batch en consola.
+    Prints a batch results summary to the console.
 
-    Muestra la tasa de victoria por estrategia y la sensibilidad
-    al parámetro p_infect.
+    Shows the win rate by strategy and sensitivity to p_infect.
 
     Args:
-        db: Instancia de Database. Si es None, usa la ruta por defecto.
+        db: Database instance. If None, uses the default path.
     """
     if db is None:
         db = Database()
 
     total_sims = db.get_simulation_count()
     print(f"\n{'='*60}")
-    print(f"  GUERRA MUNDIAL J — Resumen de {total_sims} simulaciones")
+    print(f"  GUERRA MUNDIAL J — Summary of {total_sims} simulations")
     print(f"{'='*60}")
 
-    # Estrategias
-    print("\n📊 Tasa de victoria por estrategia:")
-    print(f"  {'Estrategia':<20} {'Total':>8} {'Victorias':>10} {'Win %':>8}")
+    # Strategies
+    print("\n📊 Win rate by strategy:")
+    print(f"  {'Strategy':<20} {'Total':>8} {'Wins':>10} {'Win %':>8}")
     print(f"  {'-'*50}")
     strategies = analyze_strategies(db)
     for strategy, data in strategies.items():
@@ -159,8 +158,8 @@ def print_summary(db: Optional[Database] = None) -> None:
             f"{data['win_rate_pct']:>7.1f}%"
         )
 
-    # Sensibilidad p_infect
-    print("\n🔬 Sensibilidad a p_infect:")
+    # p_infect sensitivity
+    print("\n🔬 Sensitivity to p_infect:")
     print(f"  {'p_infect':>10} {'Total':>8} {'Win %':>8}")
     print(f"  {'-'*30}")
     try:
@@ -170,20 +169,20 @@ def print_summary(db: Optional[Database] = None) -> None:
                 f"  {row['value']:>10.1f} {row['total']:>8} {row['win_rate_pct']:>7.1f}%"
             )
     except Exception as exc:
-        print(f"  Error al calcular sensibilidad: {exc}")
+        print(f"  Error calculating sensitivity: {exc}")
 
     print(f"\n{'='*60}\n")
 
 
 def get_best_strategy(db: Optional[Database] = None) -> Optional[str]:
     """
-    Retorna el nombre de la estrategia con mayor tasa de victoria.
+    Returns the name of the strategy with the highest win rate.
 
     Args:
-        db: Instancia de Database.
+        db: Database instance.
 
     Returns:
-        Nombre de la mejor estrategia, o None si no hay datos.
+        Name of the best strategy, or None if there is no data.
     """
     strategies = analyze_strategies(db)
     if not strategies:
@@ -196,14 +195,14 @@ def get_recent_simulations(
     db: Optional[Database] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Retorna las simulaciones más recientes.
+    Returns the most recent simulations.
 
     Args:
-        limit: Número máximo de simulaciones a retornar.
-        db: Instancia de Database.
+        limit: Maximum number of simulations to return.
+        db: Database instance.
 
     Returns:
-        Lista de dicts con los datos de cada simulación.
+        List of dicts with each simulation's data.
     """
     if db is None:
         db = Database()

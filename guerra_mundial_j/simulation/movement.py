@@ -1,37 +1,37 @@
 """
-movement.py — Lógica de movimiento para agentes de la simulación.
+movement.py — Movement logic for simulation agents.
 
-Módulo de funciones puras (sin estado propio) que calculan la siguiente
-posición de cada agente en función de su tipo y el estado del mundo.
+Module of pure functions (no internal state) that calculate the next
+position of each agent based on its type and the world state.
 
-Funciones principales:
+Main functions:
     calculate_next_pos(agent, world)
-        Dispatcher: llama a _human_next_pos o _zombie_next_pos según el tipo.
+        Dispatcher: calls _human_next_pos or _zombie_next_pos based on type.
 
     _human_next_pos(human, world)
-        Si hay zombis visibles, calcula el vector de huida opuesto al más
-        cercano y añade ruido aleatorio para movimiento no determinista.
-        Si no hay amenaza, hace random walk.
+        If zombies are visible, calculates the flee vector opposite to the
+        closest one and adds random noise for non-deterministic movement.
+        If no threat, does a random walk.
 
     _zombie_next_pos(zombie, world)
-        Si tiene target_id guardado y lo localiza en el radio de visión,
-        se mueve hacia él. Si no, random walk.
+        If it has a stored target_id and finds it within vision radius,
+        moves toward it. Otherwise, random walk.
 
     move_towards(src, dst, world)
-        Un paso normalizado de src hacia dst (usado por Military y Zombie).
+        One normalized step from src toward dst (used by Military and Zombie).
 
     random_walk(pos, world, step=1)
-        Desplazamiento aleatorio de hasta `step` celdas en cada eje.
+        Random displacement of up to `step` cells per axis.
 
     panic_spread(agent, world)
-        Si ≥4 vecinos en radio 3 están en estado "running", el agente
-        entra en pánico aunque no vea zombis (contagio social).
+        If ≥4 neighbors within radius 3 are in "running" state, the agent
+        enters panic even without seeing zombies (social contagion).
 
-Utilidades internas:
-    _flee_vector   — vector normalizado de huida opuesto a la amenaza.
-    _dist          — distancia euclidiana entre dos puntos.
-    _clamp         — mantiene coordenadas dentro de [0, size-1].
-    _resolve_collision — busca celda libre si la destino está ocupada.
+Internal utilities:
+    _flee_vector   — normalized flee vector opposite to the threat.
+    _dist          — Euclidean distance between two points.
+    _clamp         — keeps coordinates within [0, size-1].
+    _resolve_collision — finds a free cell if the destination is occupied.
 """
 
 import random
@@ -50,17 +50,17 @@ def calculate_next_pos(
     world: "World",
 ) -> Tuple[int, int]:
     """
-    Calcula la siguiente posición para un agente.
+    Calculates the next position for an agent.
 
-    Para humanos: vector de huida opuesto al zombi más cercano + ruido.
-    Para zombis: hacia el objetivo o random walk.
+    For humans: flee vector opposite the closest zombie + noise.
+    For zombies: toward the target or random walk.
 
     Args:
-        agent: El agente que se va a mover.
-        world: El mundo compartido.
+        agent: The agent that is going to move.
+        world: The shared world.
 
     Returns:
-        Tupla (x, y) de la siguiente posición.
+        Tuple (x, y) of the next position.
     """
     from agents.human import Human
     from agents.zombie import Zombie
@@ -75,29 +75,29 @@ def calculate_next_pos(
 
 def _human_next_pos(human: "Agent", world: "World") -> Tuple[int, int]:
     """
-    Calcula la siguiente posición para un humano según la estrategia activa.
+    Calculates the next position for a human based on the active strategy.
 
-    Estrategias (leídas de world.strategy):
-        "none" / "flee" — huida del zombi más cercano + ruido (default).
-                          En "flee", el vector se multiplica ×1.5 para huida
-                          más agresiva una vez la Casa Blanca da la orden.
-        "group"         — sin zombis cerca: moverse hacia el centroide de los
-                          humanos vecinos (seguridad en el grupo). Con zombis: huir.
-        "military_first"— civiles sin zombis cerca siguen al militar más cercano.
-                          Con zombis: huir. Los militares lo gestionan en su update().
-        "random"        — random walk independientemente de los zombis.
-                          Representa el caos cuando el gobierno no se coordina.
+    Strategies (read from world.strategy):
+        "none" / "flee" — flee from the closest zombie + noise (default).
+                          In "flee", the vector is multiplied ×1.5 for more
+                          aggressive fleeing once the White House gives the order.
+        "group"         — no zombies nearby: move toward the centroid of
+                          neighboring humans (safety in numbers). With zombies: flee.
+        "military_first"— civilians without nearby zombies follow the closest military.
+                          With zombies: flee. Military handle this in their update().
+        "random"        — random walk regardless of zombies.
+                          Represents chaos when the government can't coordinate.
 
     Args:
-        human: El agente humano.
-        world: El mundo compartido.
+        human: The human agent.
+        world: The shared world.
 
     Returns:
-        Nueva posición (x, y).
+        New position (x, y).
     """
     strategy = getattr(world, "strategy", "none")
 
-    # Estrategia RANDOM: caos total, ignora zombis
+    # RANDOM strategy: total chaos, ignores zombies
     if strategy == "random":
         return random_walk(human.pos, world)
 
@@ -105,7 +105,7 @@ def _human_next_pos(human: "Agent", world: "World") -> Tuple[int, int]:
     zombies = [a for a in nearby if a.__class__.__name__ == "Zombie"]
 
     if not zombies:
-        # Sin peligro inmediato: aplicar movimiento estratégico
+        # No immediate danger: apply strategic movement
         if strategy == "group":
             return _group_movement(human, nearby, world)
         elif strategy == "military_first":
@@ -113,11 +113,11 @@ def _human_next_pos(human: "Agent", world: "World") -> Tuple[int, int]:
         else:
             return random_walk(human.pos, world)
 
-    # Con zombis cerca: siempre huir, pero con intensidad distinta según estrategia
+    # Zombies nearby: always flee, but with different intensity depending on strategy
     closest = min(zombies, key=lambda z: _dist(human.pos, z.pos))
     flee_vec = _flee_vector(human.pos, closest.pos)
 
-    # "flee" activo: huida más agresiva (vector ×1.5)
+    # "flee" active: more aggressive fleeing (vector ×1.5)
     flee_mult = 1.5 if strategy == "flee" else 1.0
 
     noise_x = random.uniform(-0.5, 0.5)
@@ -135,18 +135,18 @@ def _group_movement(
     world: "World",
 ) -> Tuple[int, int]:
     """
-    Mueve al humano hacia el centroide de los humanos cercanos (estrategia GROUP).
+    Moves the human toward the centroid of nearby humans (GROUP strategy).
 
-    La idea: seguridad en el grupo. Si hay suficientes vecinos, el humano
-    se desplaza hacia su centro de masa. Si está solo, camina aleatoriamente.
+    The idea: safety in numbers. If there are enough neighbors, the human
+    moves toward their center of mass. If alone, walks randomly.
 
     Args:
-        human: El agente que se mueve.
-        nearby: Agentes ya calculados en el radio de visión.
-        world: El mundo compartido.
+        human: The moving agent.
+        nearby: Agents already computed within the vision radius.
+        world: The shared world.
 
     Returns:
-        Nueva posición (x, y).
+        New position (x, y).
     """
     from agents.human import Human
 
@@ -168,22 +168,22 @@ def _escort_military(
     world: "World",
 ) -> Tuple[int, int]:
     """
-    Mueve a los civiles hacia el militar más cercano (estrategia MILITARY_FIRST).
+    Moves civilians toward the closest military agent (MILITARY_FIRST strategy).
 
-    Los militares no usan esta función — su update() los envía a cazar zombis.
-    Los civiles sin militar visible caminan aleatoriamente.
+    Military agents don't use this function — their update() sends them to hunt zombies.
+    Civilians without a visible military agent walk randomly.
 
     Args:
-        human: El agente civil que se mueve.
-        nearby: Agentes ya calculados en el radio de visión.
-        world: El mundo compartido.
+        human: The civilian agent that is moving.
+        nearby: Agents already computed within the vision radius.
+        world: The shared world.
 
     Returns:
-        Nueva posición (x, y).
+        New position (x, y).
     """
     from agents.human import Military
 
-    # Los militares tienen su propia lógica de movimiento en update()
+    # Military agents have their own movement logic in update()
     if isinstance(human, Military):
         return random_walk(human.pos, world)
 
@@ -197,22 +197,22 @@ def _escort_military(
 
 def _zombie_next_pos(zombie: "Agent", world: "World") -> Tuple[int, int]:
     """
-    Calcula la siguiente posición para un zombi.
+    Calculates the next position for a zombie.
 
-    Si tiene un target_id válido, se mueve hacia él.
-    Si no, hace random walk.
+    If it has a valid target_id, it moves toward it.
+    Otherwise, does a random walk.
 
     Args:
-        zombie: El agente zombi.
-        world: El mundo compartido.
+        zombie: The zombie agent.
+        world: The shared world.
 
     Returns:
-        Nueva posición (x, y).
+        New position (x, y).
     """
     from agents.human import Human
 
     if zombie.target_id is not None:
-        # Buscar al objetivo
+        # Search for the target
         nearby = world.get_agents_in_radius(zombie.pos, config.VISION_ZOMBIE)
         targets = [a for a in nearby if a.agent_id == zombie.target_id]
         if targets:
@@ -228,15 +228,15 @@ def move_towards(
     world: "World",
 ) -> Tuple[int, int]:
     """
-    Calcula un paso hacia una posición destino.
+    Calculates one step toward a destination position.
 
     Args:
-        src: Posición origen (x, y).
-        dst: Posición destino (x, y).
-        world: El mundo para comprobar límites.
+        src: Source position (x, y).
+        dst: Destination position (x, y).
+        world: The world for boundary checking.
 
     Returns:
-        Nueva posición (x, y) un paso más cerca de dst.
+        New position (x, y) one step closer to dst.
     """
     dx = dst[0] - src[0]
     dy = dst[1] - src[1]
@@ -245,7 +245,7 @@ def move_towards(
     if dist < 1:
         return src
 
-    # Normalizar y redondear
+    # Normalize and round
     step_x = dx / dist
     step_y = dy / dist
     new_x = src[0] + round(step_x)
@@ -260,15 +260,15 @@ def random_walk(
     step: int = 1,
 ) -> Tuple[int, int]:
     """
-    Calcula una posición adyacente aleatoria.
+    Calculates a random adjacent position.
 
     Args:
-        pos: Posición actual (x, y).
-        world: El mundo para comprobar límites.
-        step: Máximo desplazamiento en cada eje.
+        pos: Current position (x, y).
+        world: The world for boundary checking.
+        step: Maximum displacement per axis.
 
     Returns:
-        Nueva posición (x, y) adyacente.
+        New adjacent position (x, y).
     """
     dx = random.randint(-step, step)
     dy = random.randint(-step, step)
@@ -278,14 +278,14 @@ def random_walk(
 
 def panic_spread(agent: "Agent", world: "World") -> None:
     """
-    Propaga el pánico entre agentes cercanos.
+    Spreads panic among nearby agents.
 
-    Si un agente tiene ≥4 vecinos en estado "running", entra también
-    en estado "running" independientemente de si ve zombis.
+    If an agent has ≥4 neighbors in "running" state, it also enters
+    "running" state regardless of whether it sees zombies.
 
     Args:
-        agent: El agente que puede entrar en pánico.
-        world: El mundo compartido.
+        agent: The agent that may enter panic.
+        world: The shared world.
     """
     from agents.human import Human
 
@@ -303,7 +303,7 @@ def panic_spread(agent: "Agent", world: "World") -> None:
 
 
 # ---------------------------------------------------------------------------
-# Utilidades internas
+# Internal utilities
 # ---------------------------------------------------------------------------
 
 def _flee_vector(
@@ -311,21 +311,21 @@ def _flee_vector(
     threat_pos: Tuple[int, int],
 ) -> Tuple[float, float]:
     """
-    Calcula el vector de dirección opuesta a una amenaza.
+    Calculates the direction vector opposite to a threat.
 
     Args:
-        pos: Posición del agente que huye.
-        threat_pos: Posición de la amenaza.
+        pos: Position of the fleeing agent.
+        threat_pos: Position of the threat.
 
     Returns:
-        Vector normalizado de huida (dx, dy).
+        Normalized flee vector (dx, dy).
     """
     dx = pos[0] - threat_pos[0]
     dy = pos[1] - threat_pos[1]
     dist = math.sqrt(dx * dx + dy * dy)
 
     if dist < 1e-6:
-        # Misma posición: huir en dirección aleatoria
+        # Same position: flee in a random direction
         angle = random.uniform(0, 2 * math.pi)
         return (math.cos(angle), math.sin(angle))
 
@@ -333,12 +333,12 @@ def _flee_vector(
 
 
 def _dist(a: Tuple[int, int], b: Tuple[int, int]) -> float:
-    """Distancia euclidiana entre dos puntos."""
+    """Euclidean distance between two points."""
     return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
 
 
 def _clamp(pos: Tuple[int, int], size: int) -> Tuple[int, int]:
-    """Asegura que pos está dentro de [0, size-1]."""
+    """Ensures pos is within [0, size-1]."""
     return (max(0, min(size - 1, pos[0])), max(0, min(size - 1, pos[1])))
 
 
@@ -348,20 +348,20 @@ def _resolve_collision(
     world: "World",
 ) -> Tuple[int, int]:
     """
-    Si la celda destino está ocupada, busca una celda libre adyacente.
+    If the destination cell is occupied, finds a free adjacent cell.
 
     Args:
-        pos: Posición destino deseada.
-        agent: El agente que se mueve.
-        world: El mundo.
+        pos: Desired destination position.
+        agent: The moving agent.
+        world: The world.
 
     Returns:
-        La posición libre más cercana o la posición actual si no hay ninguna.
+        The nearest free position, or the current position if none is available.
     """
     if world.is_cell_free(pos):
         return pos
 
-    # Intentar posiciones adyacentes
+    # Try adjacent positions
     for dx in [-1, 0, 1]:
         for dy in [-1, 0, 1]:
             if dx == 0 and dy == 0:
@@ -370,5 +370,5 @@ def _resolve_collision(
             if world.is_cell_free(candidate):
                 return candidate
 
-    # Si todo está ocupado, quedarse en el sitio
+    # If everything is occupied, stay in place
     return agent.pos

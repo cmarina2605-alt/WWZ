@@ -1,25 +1,25 @@
 """
-test_engine.py — Tests del motor de simulación (Engine y World).
+test_engine.py — Tests for the simulation engine (Engine and World).
 
-Verifica el comportamiento del Engine como orquestador y la
-thread-safety del World bajo acceso concurrente.
+Verifies Engine behavior as an orchestrator and World thread-safety
+under concurrent access.
 
-Suites de tests:
-    TestEngineCreation          — el Engine crea el número correcto de agentes
-                                  y threads; todos son daemon; la semilla produce
-                                  resultados deterministas (reproducibilidad).
-    TestWorldLockRaceConditions — múltiples threads moviendo agentes no crashean
-                                  ni corrompen el grid; el lock impide que dos
-                                  agentes ocupen la misma celda; get_agents_in_radius
-                                  es segura bajo escritura concurrente.
-    TestWinConditions           — check_win_conditions() detecta correctamente:
-                                  zombies_win (sin humanos), humans_win (sin zombis),
-                                  humans_win (antidote_ready activo), None (ambos vivos).
-    TestEngineSnapshot          — get_snapshot() contiene todas las claves requeridas
-                                  y el campo 'grid' es un dict.
+Test suites:
+    TestEngineCreation          — Engine creates the correct number of agents
+                                  and threads; all are daemon; seed produces
+                                  deterministic results (reproducibility).
+    TestWorldLockRaceConditions — multiple threads moving agents don't crash
+                                  or corrupt the grid; lock prevents two agents
+                                  from occupying the same cell; get_agents_in_radius
+                                  is safe under concurrent writes.
+    TestWinConditions           — check_win_conditions() correctly detects:
+                                  zombies_win (no humans), humans_win (no zombies),
+                                  humans_win (antidote_ready active), None (both alive).
+    TestEngineSnapshot          — get_snapshot() contains all required keys
+                                  and the 'grid' field is a dict.
 
-Nota: cada test limpia game_over en setUp y lo activa en tearDown para
-detener threads residuales y evitar interferencias entre suites.
+Note: each test clears game_over in setUp and sets it in tearDown to stop
+residual threads and avoid inter-suite interference.
 """
 
 import threading
@@ -39,7 +39,7 @@ from agents.zombie import Zombie
 
 
 class TestEngineCreation(unittest.TestCase):
-    """Tests de creación de agentes por el motor."""
+    """Tests for agent creation by the engine."""
 
     def setUp(self) -> None:
         game_over.clear()
@@ -51,16 +51,16 @@ class TestEngineCreation(unittest.TestCase):
 
     def test_engine_creates_correct_thread_count(self) -> None:
         """
-        Engine crea el número correcto de threads de agentes.
+        Engine creates the correct number of agent threads.
 
-        Total esperado = n_humans + n_zombies.
+        Expected total = n_humans + n_zombies.
         """
         n_humans = 10
         n_zombies = 2
         engine = Engine(n_humans=n_humans, n_zombies=n_zombies)
         engine.start_simulation()
 
-        # Dar tiempo a que los threads arranquen
+        # Give threads time to start
         time.sleep(0.3)
 
         alive_agents = [a for a in engine.agents if a.is_alive()]
@@ -68,21 +68,21 @@ class TestEngineCreation(unittest.TestCase):
         self.assertEqual(
             len(engine.agents),
             total_expected,
-            f"Esperados {total_expected} agentes, encontrados {len(engine.agents)}",
+            f"Expected {total_expected} agents, found {len(engine.agents)}",
         )
 
     def test_engine_threads_are_daemon(self) -> None:
-        """Todos los threads de agentes son daemon."""
+        """All agent threads are daemon."""
         engine = Engine(n_humans=5, n_zombies=1)
         engine.start_simulation()
         time.sleep(0.2)
         for agent in engine.agents:
-            self.assertTrue(agent.daemon, f"Agente {agent.agent_id} no es daemon")
+            self.assertTrue(agent.daemon, f"Agent {agent.agent_id} is not daemon")
 
     def test_engine_seed_reproducibility(self) -> None:
         """
-        Dos simulaciones con la misma semilla crean los mismos agentes
-        en las mismas posiciones (determinismo del PRNG).
+        Two simulations with the same seed create the same agents
+        at the same positions (PRNG determinism).
         """
         game_over.clear()
         e1 = Engine(seed=42, n_humans=5, n_zombies=1)
@@ -94,11 +94,11 @@ class TestEngineCreation(unittest.TestCase):
         e2._create_agents()
         pos2 = sorted([a.pos for a in e2.agents])
 
-        self.assertEqual(pos1, pos2, "Misma semilla debe producir mismas posiciones")
+        self.assertEqual(pos1, pos2, "Same seed must produce same positions")
 
 
 class TestWorldLockRaceConditions(unittest.TestCase):
-    """Tests de thread-safety del World."""
+    """Tests for World thread-safety."""
 
     def setUp(self) -> None:
         game_over.clear()
@@ -108,8 +108,8 @@ class TestWorldLockRaceConditions(unittest.TestCase):
 
     def test_concurrent_moves_no_crash(self) -> None:
         """
-        Múltiples threads moviendo agentes simultáneamente no producen
-        errores ni corrupción del grid.
+        Multiple threads moving agents simultaneously do not produce
+        errors or grid corruption.
         """
         world = World(size=50)
         agents = [Normal(pos=(i, 0), world=world) for i in range(10)]
@@ -135,11 +135,11 @@ class TestWorldLockRaceConditions(unittest.TestCase):
         for t in threads:
             t.join(timeout=5.0)
 
-        self.assertEqual(len(errors), 0, f"Errores en movimiento concurrente: {errors}")
+        self.assertEqual(len(errors), 0, f"Errors in concurrent movement: {errors}")
 
     def test_lock_prevents_duplicate_placement(self) -> None:
         """
-        Dos threads intentando colocar en la misma celda → solo uno tiene éxito.
+        Two threads trying to place on the same cell → only one succeeds.
         """
         world = World(size=10)
         target_pos = (5, 5)
@@ -159,15 +159,15 @@ class TestWorldLockRaceConditions(unittest.TestCase):
         t1.join()
         t2.join()
 
-        # Solo uno debe haber tenido éxito (o ambos fallaron si ya estaba ocupada)
+        # Only one should have succeeded (or both failed if already occupied)
         self.assertLessEqual(
             results.count(True), 1,
-            "Solo un agente puede ocupar una celda simultáneamente",
+            "Only one agent can occupy a cell simultaneously",
         )
 
     def test_get_agents_in_radius_thread_safe(self) -> None:
         """
-        get_agents_in_radius() no lanza excepciones bajo modificación concurrente.
+        get_agents_in_radius() does not raise exceptions under concurrent modification.
         """
         world = World(size=30)
         agents = [Normal(pos=(i, i), world=world) for i in range(5)]
@@ -199,11 +199,11 @@ class TestWorldLockRaceConditions(unittest.TestCase):
         t_read.join(timeout=5.0)
         t_write.join(timeout=5.0)
 
-        self.assertEqual(len(errors), 0, f"Errores bajo acceso concurrente: {errors}")
+        self.assertEqual(len(errors), 0, f"Errors under concurrent access: {errors}")
 
 
 class TestWinConditions(unittest.TestCase):
-    """Tests de check_win_conditions()."""
+    """Tests for check_win_conditions()."""
 
     def setUp(self) -> None:
         game_over.clear()
@@ -214,13 +214,13 @@ class TestWinConditions(unittest.TestCase):
 
     def test_zombies_win_when_no_humans(self) -> None:
         """
-        Cuando no hay humanos vivos, check_win_conditions() establece
+        When there are no living humans, check_win_conditions() sets
         result = 'zombies_win'.
         """
         engine = Engine(n_humans=2, n_zombies=1)
         engine._create_agents()
 
-        # Matar a todos los humanos
+        # Kill all humans
         for agent in engine.agents:
             if agent.__class__.__name__ != "Zombie":
                 agent.die()
@@ -230,13 +230,13 @@ class TestWinConditions(unittest.TestCase):
 
     def test_humans_win_when_no_zombies(self) -> None:
         """
-        Cuando no hay zombis, check_win_conditions() establece
+        When there are no zombies, check_win_conditions() sets
         result = 'humans_win'.
         """
         engine = Engine(n_humans=3, n_zombies=1)
         engine._create_agents()
 
-        # Matar a todos los zombis
+        # Kill all zombies
         for agent in engine.agents:
             if agent.__class__.__name__ == "Zombie":
                 agent.die()
@@ -246,7 +246,7 @@ class TestWinConditions(unittest.TestCase):
 
     def test_antidote_triggers_human_win(self) -> None:
         """
-        Cuando antidote_ready está activo, los humanos ganan.
+        When antidote_ready is active, humans win.
         """
         engine = Engine(n_humans=3, n_zombies=2)
         engine._create_agents()
@@ -257,12 +257,12 @@ class TestWinConditions(unittest.TestCase):
 
     def test_no_result_when_both_present(self) -> None:
         """
-        Si hay humanos y zombis, result debe ser None.
+        If there are humans and zombies, result must be None.
         """
         engine = Engine(n_humans=5, n_zombies=2)
         engine._create_agents()
 
-        # Verificar que al menos hay agentes de ambos tipos vivos
+        # Verify that at least there are agents of both types alive
         has_humans = any(
             a.__class__.__name__ != "Zombie" and a.is_alive()
             for a in engine.agents
@@ -276,12 +276,12 @@ class TestWinConditions(unittest.TestCase):
             engine.check_win_conditions()
             self.assertIsNone(
                 engine.result,
-                "No debe haber resultado con ambos bandos presentes",
+                "There must be no result with both sides present",
             )
 
 
 class TestEngineSnapshot(unittest.TestCase):
-    """Tests del método get_snapshot()."""
+    """Tests for the get_snapshot() method."""
 
     def setUp(self) -> None:
         game_over.clear()
@@ -290,17 +290,17 @@ class TestEngineSnapshot(unittest.TestCase):
         game_over.set()
 
     def test_snapshot_has_required_keys(self) -> None:
-        """get_snapshot() incluye todas las claves requeridas."""
+        """get_snapshot() includes all required keys."""
         engine = Engine(n_humans=3, n_zombies=1)
         engine._create_agents()
         snap = engine.get_snapshot()
 
         required_keys = {"tick", "n_humans", "n_zombies", "result", "running", "grid", "seed"}
         for key in required_keys:
-            self.assertIn(key, snap, f"Clave '{key}' falta en snapshot")
+            self.assertIn(key, snap, f"Key '{key}' missing in snapshot")
 
     def test_snapshot_grid_is_dict(self) -> None:
-        """El campo 'grid' del snapshot es un diccionario."""
+        """The 'grid' field in the snapshot is a dictionary."""
         engine = Engine(n_humans=3, n_zombies=1)
         engine._create_agents()
         snap = engine.get_snapshot()

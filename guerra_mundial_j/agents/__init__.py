@@ -1,25 +1,25 @@
 """
-agents — Paquete de agentes de la simulación Guerra Mundial J.
+agents — Guerra Mundial J simulation agents package.
 
-Contiene todas las clases que representan entidades que se mueven y
-actúan en el grid. Cada agente corre en su propio thread (hereda de
-threading.Thread) y ejecuta su lógica en un bucle tick a tick.
+Contains all classes representing entities that move and act on the grid.
+Each agent runs in its own thread (inherits from threading.Thread) and
+executes its logic in a tick-by-tick loop.
 
-Jerarquía de clases:
-    Agent  (base_agent.py) — clase abstracta, gestiona el ciclo de vida
-    ├── Human  (human.py)  — humano base con miedo y empatía
-    │   ├── Normal         — ciudadano corriente, solo huye
-    │   ├── Scientist      — navega al laboratorio y trabaja en el antídoto
-    │   ├── Military       — persigue zombis activamente si tiene fuerza suficiente
-    │   └── Politician     — emite alertas nacionales al detectar zombis
-    └── Zombie (zombie.py) — persigue al humano más cercano; random walk si no ve ninguno
+Class hierarchy:
+    Agent  (base_agent.py) — abstract class, manages the lifecycle
+    ├── Human  (human.py)  — base human with fear and empathy
+    │   ├── Normal         — ordinary citizen, only flees
+    │   ├── Scientist      — navigates to the lab and works on the antidote
+    │   ├── Military       — actively chases zombies if strong enough
+    │   └── Politician     — issues national alerts when detecting zombies
+    └── Zombie (zombie.py) — chases the nearest human; random walk if none visible
 
-Señales globales compartidas (threading.Event):
-    game_over      — detiene todos los threads cuando la partida acaba
-    antidote_ready — activa la condición de victoria humana
-    national_alert — activa la respuesta política/militar
+Shared global signals (threading.Event):
+    game_over      — stops all threads when the game ends
+    antidote_ready — activates the human victory condition
+    national_alert — activates the political/military response
 
-Exporta las clases principales para imports directos desde `agents`.
+Exports the main classes for direct imports from `agents`.
 """
 
 from agents.base_agent import Agent

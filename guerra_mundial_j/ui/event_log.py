@@ -1,26 +1,26 @@
 """
-event_log.py — Widget de log de eventos de la simulación.
+event_log.py — Simulation event log widget.
 
-EventLog es un panel de texto con scroll que muestra en tiempo real
-todos los eventos significativos que ocurren durante la simulación,
-con timestamp y colores diferenciados por tipo de evento.
+EventLog is a scrollable text panel that displays in real time all
+significant events occurring during the simulation, with timestamps
+and colors differentiated by event type.
 
-Fuentes de eventos:
-    - world.pop_events() en el loop de UI → infecciones, muertes, escapes,
-      alertas nacionales, creación del antídoto, eventos del brote (José).
-    - app.py directamente → eventos de control (start, pause, reset, batch).
+Event sources:
+    - world.pop_events() in the UI loop → infections, deaths, escapes,
+      national alerts, antidote creation, outbreak events (José).
+    - app.py directly → control events (start, pause, reset, batch).
 
-Colores por tipo:
-    Rojo clarito  — muertes (💀 murió, dead)
-    Naranja       — infecciones (🧟 infectado)
-    Verde clarito — antídoto completado (💉)
-    Azul clarito  — alertas nacionales (📨 Casa Blanca)
-    Verde pálido  — escapes (🏃)
-    Gris          — eventos de sistema (start, pause, reset)
-    Blanco/gris   — cualquier otro evento
+Colors by type:
+    Light red   — deaths (💀 died, dead)
+    Orange      — infections (🧟 infected)
+    Light green — antidote completed (💉)
+    Light blue  — national alerts (📨 White House)
+    Pale green  — escapes (🏃)
+    Gray        — system events (start, pause, reset)
+    White/gray  — any other event
 
-Los mensajes más recientes aparecen arriba (insert en posición 1.0).
-Se mantiene un máximo de max_lines=200 entradas para no saturar la memoria.
+Most recent messages appear at the top (insert at position 1.0).
+A maximum of max_lines=200 entries is kept to avoid memory saturation.
 """
 
 import tkinter as tk
@@ -30,15 +30,15 @@ from typing import Optional
 
 class EventLog(tk.Frame):
     """
-    Panel de log de eventos con scroll automático.
+    Event log panel with auto-scroll.
 
-    Muestra mensajes de eventos de la simulación (infecciones,
-    muertes, antídoto, alertas) con timestamp. Los nuevos mensajes
-    se insertan al principio (más recientes arriba).
+    Displays simulation event messages (infections, deaths, antidote,
+    alerts) with timestamps. New messages are inserted at the top
+    (most recent first).
 
     Attributes:
-        _text (tk.Text): Widget de texto con scrollbar.
-        max_lines (int): Máximo de líneas antes de hacer pruning.
+        _text (tk.Text): Text widget with scrollbar.
+        max_lines (int): Maximum lines before pruning.
     """
 
     # Colores para tipos de mensajes especiales
@@ -58,26 +58,26 @@ class EventLog(tk.Frame):
         max_lines: int = 200,
     ) -> None:
         """
-        Inicializa el panel de log.
+        Initializes the log panel.
 
         Args:
-            parent: Widget padre.
-            max_lines: Número máximo de líneas a mantener en el log.
+            parent: Parent widget.
+            max_lines: Maximum number of lines to keep in the log.
         """
         super().__init__(parent, bg="#0d1117", padx=3, pady=3)
         self.max_lines: int = max_lines
         self._build_widget()
 
     # ------------------------------------------------------------------
-    # Construcción
+    # Construction
     # ------------------------------------------------------------------
 
     def _build_widget(self) -> None:
-        """Construye el widget de texto con scrollbar."""
-        # Título
+        """Builds the text widget with scrollbar."""
+        # Title
         title = tk.Label(
             self,
-            text="📋 LOG DE EVENTOS",
+            text="📋 EVENT LOG",
             bg="#0d1117",
             fg="#58a6ff",
             font=("Consolas", 9, "bold"),
@@ -85,7 +85,7 @@ class EventLog(tk.Frame):
         )
         title.pack(fill=tk.X, pady=(0, 2))
 
-        # Frame contenedor texto + scroll
+        # Text + scroll container frame
         text_frame = tk.Frame(self, bg="#0d1117")
         text_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -107,29 +107,29 @@ class EventLog(tk.Frame):
         self._text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self._text.yview)
 
-        # Configurar tags de color
+        # Configure color tags
         for tag, color in self.TAG_COLORS.items():
             self._text.tag_config(tag, foreground=color)
 
     # ------------------------------------------------------------------
-    # API pública
+    # Public API
     # ------------------------------------------------------------------
 
     def add_event(self, msg: str, tag: Optional[str] = None) -> None:
         """
-        Añade un mensaje al log con timestamp.
+        Adds a message to the log with a timestamp.
 
-        El mensaje se inserta al principio del texto (más reciente arriba).
-        Detecta automáticamente el tipo según emojis en el mensaje.
+        The message is inserted at the top of the text (most recent first).
+        Automatically detects the type based on emojis in the message.
 
         Args:
-            msg: Mensaje a mostrar.
-            tag: Tag de color opcional. Si None, se detecta automáticamente.
+            msg: Message to display.
+            tag: Optional color tag. If None, detected automatically.
         """
         timestamp = datetime.now().strftime("%H:%M:%S")
         line = f"[{timestamp}] {msg}\n"
 
-        # Detección automática de tipo por contenido
+        # Automatic type detection by content
         if tag is None:
             tag = self._detect_tag(msg)
 
@@ -139,34 +139,34 @@ class EventLog(tk.Frame):
         self._text.config(state=tk.DISABLED)
 
     def clear(self) -> None:
-        """Limpia todo el contenido del log."""
+        """Clears all log content."""
         self._text.config(state=tk.NORMAL)
         self._text.delete("1.0", tk.END)
         self._text.config(state=tk.DISABLED)
 
     # ------------------------------------------------------------------
-    # Internos
+    # Internals
     # ------------------------------------------------------------------
 
     def _detect_tag(self, msg: str) -> str:
         """
-        Detecta el tag de color apropiado según el contenido del mensaje.
+        Detects the appropriate color tag based on message content.
 
         Args:
-            msg: Mensaje a analizar.
+            msg: Message to analyze.
 
         Returns:
-            Nombre del tag de color.
+            Color tag name.
         """
-        if any(e in msg for e in ("💀", "murió", "dead")):
+        if any(e in msg for e in ("💀", "died", "dead")):
             return "death"
-        if any(e in msg for e in ("🧟", "infectado", "infect")):
+        if any(e in msg for e in ("🧟", "infected", "infect")):
             return "infection"
-        if any(e in msg for e in ("🧪", "antídoto", "antidote")):
+        if any(e in msg for e in ("🧪", "antidote", "ANTIDOTE")):
             return "antidote"
-        if any(e in msg for e in ("📨", "alerta", "alert", "Casa Blanca")):
+        if any(e in msg for e in ("📨", "alert", "White House")):
             return "alert"
-        if any(e in msg for e in ("🏃", "escapó", "escape")):
+        if any(e in msg for e in ("🏃", "escaped", "escape")):
             return "escape"
         if any(e in msg for e in ("▶", "⏸", "🔄", "✅", "🔁")):
             return "system"
@@ -174,7 +174,7 @@ class EventLog(tk.Frame):
 
     def _prune(self) -> None:
         """
-        Elimina las líneas más antiguas si se supera max_lines.
+        Removes the oldest lines when max_lines is exceeded.
         """
         line_count = int(self._text.index(tk.END).split(".")[0]) - 1
         if line_count > self.max_lines:

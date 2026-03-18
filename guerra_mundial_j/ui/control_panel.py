@@ -1,24 +1,24 @@
 """
-control_panel.py — Panel de controles de la simulación.
+control_panel.py — Simulation controls panel.
 
-Proporciona al usuario los controles interactivos para manejar la
-simulación sin tener que editar código ni reiniciar el programa.
+Provides the user with interactive controls to manage the simulation
+without editing code or restarting the program.
 
-Botones:
-    ▶ Start      — arranca la simulación (deshabilitado mientras corre).
-    ⏸ Pause      — pausa / reanuda; el texto cambia a "Resume" cuando pausado.
-    🔄 Reset      — detiene y reinicia todo desde cero.
-    ⚙ Batch×100  — lanza 100 simulaciones headless en background y guarda
-                   resultados en la DB para análisis posterior.
+Buttons:
+    ▶ Start      — starts the simulation (disabled while running).
+    ⏸ Pause      — pauses / resumes; text changes to "Resume" when paused.
+    🔄 Reset      — stops and restarts everything from scratch.
+    ⚙ Batch×100  — launches 100 headless simulations in the background and
+                   saves results to the DB for later analysis.
 
-Sliders (ajuste en tiempo real):
-    Velocidad     — modifica config.TICK_SPEED (0.01 – 0.5 s/tick).
-    P(infección)  — modifica config.P_INFECT y engine.p_infect (0.0 – 1.0).
-    N. Humanos    — modifica config.NUM_HUMANS para la próxima simulación.
-    Visión Zombi  — modifica config.VISION_ZOMBIE (5 – 30 celdas).
+Sliders (real-time adjustment):
+    Speed         — modifies config.TICK_SPEED (0.01 – 0.5 s/tick).
+    P(infection)  — modifies config.P_INFECT and engine.p_infect (0.0 – 1.0).
+    N. Humans     — modifies config.NUM_HUMANS for the next simulation.
+    Zombie Vision — modifies config.VISION_ZOMBIE (5 – 30 cells).
 
-Nota: los cambios de Velocidad, P(infección) y Visión Zombi tienen efecto
-inmediato. N. Humanos solo aplica al hacer Reset + Start.
+Note: Speed, P(infection) and Zombie Vision changes take effect immediately.
+N. Humans only applies after Reset + Start.
 """
 
 import tkinter as tk
@@ -33,28 +33,28 @@ if TYPE_CHECKING:
 
 class ControlPanel(tk.Frame):
     """
-    Panel de control con botones y sliders interactivos.
+    Control panel with interactive buttons and sliders.
 
-    Permite al usuario iniciar, pausar y reiniciar la simulación,
-    así como ajustar parámetros en tiempo real mediante sliders.
+    Allows the user to start, pause, and reset the simulation,
+    as well as adjust parameters in real time via sliders.
 
-    Sliders disponibles:
-        - Velocidad de simulación (tick_speed).
-        - Probabilidad de infección (p_infect).
-        - Número de humanos (n_humans).
-        - Visión de los zombis (vision_zombie).
+    Available sliders:
+        - Simulation speed (tick_speed).
+        - Infection probability (p_infect).
+        - Number of humans (n_humans).
+        - Zombie vision (vision_zombie).
 
     Attributes:
-        app (App): Referencia a la ventana principal.
+        app (App): Reference to the main window.
     """
 
     def __init__(self, parent: tk.Widget, app: "App") -> None:
         """
-        Inicializa el panel de control.
+        Initializes the control panel.
 
         Args:
-            parent: Widget padre.
-            app: Referencia a la App principal para llamar acciones.
+            parent: Parent widget.
+            app: Reference to the main App for calling actions.
         """
         super().__init__(parent, bg="#16213e", padx=5, pady=5)
         self.app: "App" = app
@@ -62,11 +62,11 @@ class ControlPanel(tk.Frame):
         self._build_sliders()
 
     # ------------------------------------------------------------------
-    # Construcción de botones
+    # Button construction
     # ------------------------------------------------------------------
 
     def _build_buttons(self) -> None:
-        """Construye la fila de botones de control."""
+        """Builds the control button row."""
         btn_frame = tk.Frame(self, bg="#16213e")
         btn_frame.pack(fill=tk.X, pady=(0, 8))
 
@@ -111,11 +111,11 @@ class ControlPanel(tk.Frame):
         self.btn_batch.pack(side=tk.LEFT, padx=2)
 
     # ------------------------------------------------------------------
-    # Construcción de sliders
+    # Slider construction
     # ------------------------------------------------------------------
 
     def _build_sliders(self) -> None:
-        """Construye los sliders de ajuste de parámetros."""
+        """Builds the parameter adjustment sliders."""
         slider_frame = tk.Frame(self, bg="#16213e")
         slider_frame.pack(fill=tk.X)
 
@@ -123,7 +123,7 @@ class ControlPanel(tk.Frame):
 
         slider_defs = [
             {
-                "label": "Velocidad",
+                "label": "Speed",
                 "key": "tick_speed",
                 "from_": 0.01,
                 "to": 0.5,
@@ -132,7 +132,7 @@ class ControlPanel(tk.Frame):
                 "callback": self._on_speed_change,
             },
             {
-                "label": "P(infección)",
+                "label": "P(infection)",
                 "key": "p_infect",
                 "from_": 0.0,
                 "to": 1.0,
@@ -141,7 +141,7 @@ class ControlPanel(tk.Frame):
                 "callback": self._on_p_infect_change,
             },
             {
-                "label": "N. Humanos",
+                "label": "N. Humans",
                 "key": "n_humans",
                 "from_": 10,
                 "to": 300,
@@ -150,7 +150,7 @@ class ControlPanel(tk.Frame):
                 "callback": self._on_n_humans_change,
             },
             {
-                "label": "Visión Zombi",
+                "label": "Zombie Vision",
                 "key": "vision_zombie",
                 "from_": 5,
                 "to": 30,
@@ -191,59 +191,59 @@ class ControlPanel(tk.Frame):
             self._sliders[sd["key"]] = (slider, var)
 
     # ------------------------------------------------------------------
-    # Callbacks de sliders
+    # Slider callbacks
     # ------------------------------------------------------------------
 
     def _on_speed_change(self, value: str) -> None:
         """
-        Actualiza la velocidad global de la simulación.
+        Updates the global simulation speed.
 
         Args:
-            value: Nuevo valor del slider como string.
+            value: New slider value as string.
         """
         config.TICK_SPEED = float(value)
 
     def _on_p_infect_change(self, value: str) -> None:
         """
-        Actualiza la probabilidad de infección en tiempo real.
+        Updates the infection probability in real time.
 
         Args:
-            value: Nuevo valor (0.0 - 1.0).
+            value: New value (0.0 - 1.0).
         """
         config.P_INFECT = float(value)
         self.app.engine.p_infect = float(value)
 
     def _on_n_humans_change(self, value: str) -> None:
         """
-        Actualiza el número de humanos para la próxima simulación.
+        Updates the number of humans for the next simulation.
 
-        Nota: Solo tiene efecto al hacer Reset + Start.
+        Note: Only takes effect after Reset + Start.
 
         Args:
-            value: Nuevo valor (10 - 300).
+            value: New value (10 - 300).
         """
         config.NUM_HUMANS = int(float(value))
 
     def _on_vision_zombie_change(self, value: str) -> None:
         """
-        Actualiza el rango de visión de los zombis en tiempo real.
+        Updates the zombie vision range in real time.
 
         Args:
-            value: Nuevo valor en celdas.
+            value: New value in cells.
         """
         config.VISION_ZOMBIE = int(float(value))
 
     # ------------------------------------------------------------------
-    # Estado de los botones
+    # Button state
     # ------------------------------------------------------------------
 
     def set_button_state(self, running: bool, paused: bool) -> None:
         """
-        Actualiza el estado visual de los botones según la simulación.
+        Updates the visual state of buttons based on simulation state.
 
         Args:
-            running: True si la simulación está en marcha.
-            paused: True si está pausada.
+            running: True if simulation is running.
+            paused: True if paused.
         """
         if running and not paused:
             self.btn_start.config(state=tk.DISABLED)

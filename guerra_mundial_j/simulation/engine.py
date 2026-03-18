@@ -1,28 +1,28 @@
 """
-engine.py — Motor principal de la simulación Guerra Mundial J.
+engine.py — Main engine for the Guerra Mundial J simulation.
 
-Engine es el orquestador central: crea el mundo, genera todos los agentes,
-los coloca en el grid, lanza sus threads y gestiona el ciclo de vida
-completo de la simulación.
+Engine is the central orchestrator: it creates the world, generates all agents,
+places them on the grid, starts their threads and manages the complete
+lifecycle of the simulation.
 
-Threads que gestiona:
-    - Un thread por agente (humano o zombi) → lógica autónoma en Agent.run().
-    - WinChecker   → comprueba condiciones de victoria cada WIN_CHECK_INTERVAL s.
-    - TickCounter  → incrementa world.tick a la velocidad base de la simulación.
-    - InfectionMonitor → detecta infectados y los convierte en zombis tras
-                         INFECTION_DELAY_TICKS ticks de incubación.
+Threads it manages:
+    - One thread per agent (human or zombie) → autonomous logic in Agent.run().
+    - WinChecker   → checks victory conditions every WIN_CHECK_INTERVAL s.
+    - TickCounter  → increments world.tick at the base simulation speed.
+    - InfectionMonitor → detects infected agents and turns them into zombies after
+                         INFECTION_DELAY_TICKS ticks of incubation.
 
-Condiciones de victoria:
-    Humanos ganan si: no quedan zombis, o antidote_ready está activo.
-    Zombis ganan si:  no quedan humanos vivos.
+Victory conditions:
+    Humans win if: no zombies remain, or antidote_ready is active.
+    Zombies win if: no living humans remain.
 
-Controles en tiempo real:
-    pause() / resume() — suspenden/reanudan el loop de agentes.
-    reset()            — detiene todo y limpia el estado para reiniciar.
-    stop()             — señaliza game_over y espera que los threads terminen.
+Real-time controls:
+    pause() / resume() — suspend/resume the agent loop.
+    reset()            — stops everything and clears state for a restart.
+    stop()             — signals game_over and waits for threads to finish.
 
-El Engine también expone get_snapshot() para que la UI acceda al estado
-actual sin race conditions, y get_stats() para guardar resultados en la DB.
+Engine also exposes get_snapshot() so the UI can access the current state
+without race conditions, and get_stats() to save results to the DB.
 """
 
 import threading
@@ -39,26 +39,26 @@ from agents.zombie import Zombie
 
 class Engine:
     """
-    Motor central de la simulación.
+    Central simulation engine.
 
-    Responsabilidades:
-    - Crear y posicionar agentes en el mundo.
-    - Lanzar todos los threads de agentes.
-    - Supervisar condiciones de victoria/derrota.
-    - Exponer métodos de control: start, pause, reset.
-    - Proveer snapshots del estado para la UI.
+    Responsibilities:
+    - Create and position agents in the world.
+    - Launch all agent threads.
+    - Monitor victory/defeat conditions.
+    - Expose control methods: start, pause, reset.
+    - Provide state snapshots for the UI.
 
     Attributes:
-        world (World): El mundo compartido.
-        agents (List[Agent]): Lista de todos los agentes vivos.
-        n_humans (int): Número de humanos vivos.
-        n_zombies (int): Número de zombis vivos.
-        tick (int): Tick actual de la simulación.
-        running (bool): True si la simulación está en marcha.
-        paused (bool): True si está en pausa.
+        world (World): The shared world.
+        agents (List[Agent]): List of all living agents.
+        n_humans (int): Number of living humans.
+        n_zombies (int): Number of living zombies.
+        tick (int): Current simulation tick.
+        running (bool): True if the simulation is running.
+        paused (bool): True if paused.
         result (Optional[str]): "humans_win" | "zombies_win" | None.
-        seed (int): Semilla aleatoria usada en esta simulación.
-        strategy (str): Estrategia de comportamiento humano activa.
+        seed (int): Random seed used in this simulation.
+        strategy (str): Active human behavior strategy.
     """
 
     def __init__(
@@ -70,20 +70,20 @@ class Engine:
         p_infect: float = config.P_INFECT,
     ) -> None:
         """
-        Inicializa el motor con parámetros de simulación.
+        Initializes the engine with simulation parameters.
 
         Args:
-            seed: Semilla aleatoria (None = aleatoria).
-            strategy: Estrategia de comportamiento humano.
-            n_humans: Número inicial de humanos.
-            n_zombies: Número inicial de zombis.
-            p_infect: Probabilidad de infección.
+            seed: Random seed (None = random).
+            strategy: Human behavior strategy.
+            n_humans: Initial number of humans.
+            n_zombies: Initial number of zombies.
+            p_infect: Infection probability.
         """
         self.seed: int = seed if seed is not None else random.randint(0, 999999)
         random.seed(self.seed)
 
         self.strategy: str = strategy
-        self.phase: str = "🧟 Brote"   # Fase narrativa actual de la simulación
+        self.phase: str = "🧟 Outbreak"   # Current narrative phase of the simulation
         self.n_humans_initial: int = n_humans
         self.n_zombies_initial: int = n_zombies
         self.p_infect: float = p_infect
@@ -100,25 +100,25 @@ class Engine:
         self.end_time: Optional[float] = None
 
         self._pause_event: threading.Event = threading.Event()
-        self._pause_event.set()  # No pausado inicialmente
+        self._pause_event.set()  # Not paused initially
         self._win_thread: Optional[threading.Thread] = None
         self._tick_thread: Optional[threading.Thread] = None
 
-        # Limpiar eventos globales
+        # Clear global events
         game_over.clear()
         antidote_ready.clear()
         national_alert.clear()
 
     # ------------------------------------------------------------------
-    # Ciclo de vida
+    # Lifecycle
     # ------------------------------------------------------------------
 
     def start_simulation(self) -> None:
         """
-        Crea todos los agentes, los posiciona y lanza sus threads.
+        Creates all agents, positions them and starts their threads.
 
-        También inicia el thread de supervisión de condiciones de victoria,
-        el thread del contador de ticks global y el monitor de infectados.
+        Also starts the victory condition monitoring thread,
+        the global tick counter thread and the infection monitor.
         """
         self._create_agents()
         self._start_all_threads()
@@ -126,35 +126,35 @@ class Engine:
         self.running = True
         self.start_time = time.time()
 
-        # Evento narrativo de apertura: el origen del brote
+        # Opening narrative event: the origin of the outbreak
         self.world.push_event(
             "outbreak",
-            "🧪 José el Profe, harto de sus alumnos, ha creado la Fórmula Z...",
+            "🧪 José the Teacher, fed up with his students, has created Formula Z...",
         )
         self.world.push_event(
             "outbreak",
-            "🧟 ¡El experimento ha salido MAL! ¡José se convierte en zombi!",
+            "🧟 The experiment went WRONG! José turns into a zombie!",
         )
 
-        # Thread de supervisión de victorias
+        # Victory monitoring thread
         self._win_thread = threading.Thread(
             target=self._win_condition_loop, daemon=True, name="WinChecker"
         )
         self._win_thread.start()
 
-        # Thread de tick global
+        # Global tick thread
         self._tick_thread = threading.Thread(
             target=self._tick_loop, daemon=True, name="TickCounter"
         )
         self._tick_thread.start()
 
-        # Thread de conversión de infectados
+        # Infected conversion thread
         self._infection_thread = threading.Thread(
             target=self._infection_monitor_loop, daemon=True, name="InfectionMonitor"
         )
         self._infection_thread.start()
 
-        # Thread de la mecánica Casa Blanca: espera alerta → elige estrategia
+        # White House mechanic thread: waits for alert → chooses strategy
         self._strategy_thread = threading.Thread(
             target=self._strategy_monitor_loop, daemon=True, name="StrategyMonitor"
         )
@@ -162,10 +162,10 @@ class Engine:
 
     def pause(self) -> None:
         """
-        Pausa o reanuda la simulación.
+        Pauses or resumes the simulation.
 
-        Activa/desactiva el evento de pausa. Los agentes comprueban
-        este evento en su bucle run() para detenerse.
+        Sets/clears the pause event. Agents check this event
+        in their run() loop to stop.
         """
         if self.paused:
             self._pause_event.set()
@@ -176,13 +176,13 @@ class Engine:
 
     def reset(self) -> None:
         """
-        Detiene la simulación actual y reinicia el estado.
+        Stops the current simulation and resets the state.
 
-        Activa game_over para terminar todos los threads de agentes,
-        limpia el mundo y resetea contadores.
+        Sets game_over to end all agent threads,
+        clears the world and resets counters.
         """
         game_over.set()
-        time.sleep(0.5)  # Dar tiempo a los threads a terminar
+        time.sleep(0.5)  # Give threads time to finish
 
         self.agents.clear()
         self.world = World()
@@ -195,7 +195,7 @@ class Engine:
         self.start_time = None
         self.end_time = None
         self.strategy = "none"
-        self.phase = "🧟 Brote"
+        self.phase = "🧟 Outbreak"
 
         game_over.clear()
         antidote_ready.clear()
@@ -203,23 +203,23 @@ class Engine:
         self._pause_event.set()
 
     def stop(self) -> None:
-        """Detiene la simulación definitivamente."""
+        """Stops the simulation permanently."""
         game_over.set()
         self.running = False
         self.end_time = time.time()
 
     # ------------------------------------------------------------------
-    # Creación de agentes
+    # Agent creation
     # ------------------------------------------------------------------
 
     def _create_agents(self) -> None:
         """
-        Crea y posiciona todos los agentes en el mundo.
+        Creates and positions all agents in the world.
 
-        Distribuye roles según las constantes de configuración.
+        Distributes roles according to the configuration constants.
         """
         n = self.n_humans_initial
-        # Escalar roles para que no superen el total de humanos
+        # Scale roles so they don't exceed the total number of humans
         n_sci = min(config.NUM_SCIENTISTS, max(0, n // 10))
         n_mil = min(config.NUM_MILITARY, max(0, n // 5))
         n_pol = min(config.NUM_POLITICIANS, max(0, n // 20))
@@ -247,10 +247,10 @@ class Engine:
             self.agents.append(agent)
             self.n_humans += 1
 
-        # Crear zombis — el primero siempre es José y nace en San Diego
+        # Create zombies — the first one is always José and spawns in San Diego
         for i in range(self.n_zombies_initial):
             if i == 0:
-                # José aparece en San Diego (o en una celda libre cercana)
+                # José appears in San Diego (or a nearby free cell)
                 outbreak = config.OUTBREAK_POS
                 pos = outbreak if self.world.is_cell_free(outbreak) else self.world.find_free_cell()
             else:
@@ -267,16 +267,16 @@ class Engine:
             self.n_zombies += 1
 
     def _start_all_threads(self) -> None:
-        """Inicia el thread de todos los agentes creados."""
+        """Starts the thread of every created agent."""
         for agent in self.agents:
             agent.start()
 
     # ------------------------------------------------------------------
-    # Bucles internos
+    # Internal loops
     # ------------------------------------------------------------------
 
     def _tick_loop(self) -> None:
-        """Incrementa el tick global del mundo a intervalos regulares."""
+        """Increments the global world tick at regular intervals."""
         while not game_over.is_set():
             self._pause_event.wait()
             time.sleep(config.TICK_SPEED)
@@ -285,35 +285,35 @@ class Engine:
 
     def _strategy_monitor_loop(self) -> None:
         """
-        Implementa la mecánica 'mensaje a la Casa Blanca'.
+        Implements the 'message to the White House' mechanic.
 
-        Flujo:
-          1. Espera a que un Político active national_alert.
-          2. Cuenta cuántas personas están en pánico (running) → más pánico,
-             mensaje más rápido (la noticia se esparce sola).
-          3. Espera delay_ticks antes de que la Casa Blanca 'responda'.
-          4. Elige la estrategia según la influencia del político más poderoso.
-          5. Escribe world.strategy para que todos los agentes la lean.
+        Flow:
+          1. Waits for a Politician to activate national_alert.
+          2. Counts how many people are in panic (running) → more panic,
+             faster message (the news spreads on its own).
+          3. Waits delay_ticks before the White House 'responds'.
+          4. Chooses the strategy based on the most influential politician.
+          5. Writes world.strategy so all agents can read it.
         """
         national_alert.wait()
         if game_over.is_set():
             return
 
-        # Cuánta gente en pánico cuando llega la alerta
+        # How many people are in panic when the alert arrives
         num_alerted = sum(1 for a in self.agents if getattr(a, "state", "") == "running")
         delay_ticks = max(
             config.MIN_ALERT_DELAY,
             int(config.WHITEHOUSE_DELAY_BASE - config.WHITEHOUSE_DELAY_K * num_alerted),
         )
 
-        self.phase = "📨 Alerta enviada"
+        self.phase = "📨 Alert sent"
         self.world.push_event(
             "alert",
-            f"📨 Mensaje en camino a Casa Blanca "
-            f"({num_alerted} en pánico) — llegará en ~{delay_ticks} ticks",
+            f"📨 Message on its way to the White House "
+            f"({num_alerted} in panic) — arriving in ~{delay_ticks} ticks",
         )
 
-        # Esperar los ticks de retardo
+        # Wait for the delay ticks
         start_tick = self.tick
         while self.tick - start_tick < delay_ticks and not game_over.is_set():
             time.sleep(0.2)
@@ -322,7 +322,7 @@ class Engine:
         if game_over.is_set():
             return
 
-        # Elegir estrategia y activarla
+        # Choose strategy and activate it
         chosen, winner = self._choose_strategy()
         self.strategy = chosen
         self.world.strategy = chosen
@@ -332,23 +332,23 @@ class Engine:
             self.phase = f"⚙ {ideology_name}"
             self.world.push_event(
                 "strategy",
-                f"🏛 Casa Blanca responde: {ideology_name} (influencia {winner.influence}) impone su agenda",
+                f"🏛 The White House responds: {ideology_name} (influence {winner.influence}) imposes their agenda",
             )
         else:
-            self.phase = "⚙ Protocolo activado"
-            self.world.push_event("strategy", "🏛 Casa Blanca ha respondido (sin políticos vivos)")
+            self.phase = "⚙ Protocol activated"
+            self.world.push_event("strategy", "🏛 The White House has responded (no politicians alive)")
         self.world.push_event("strategy", config.STRATEGY_DESCRIPTIONS.get(chosen, chosen))
 
     def _choose_strategy(self):
         """
-        Elige la estrategia según la ideología del Político más influyente.
+        Chooses the strategy based on the ideology of the most influential Politician.
 
-        Cada político tiene una ideología fija que mapea directamente a una
-        estrategia. Gana el que tenga mayor influence y esté vivo.
-        Si no hay políticos, se usa "flee" por defecto.
+        Each politician has a fixed ideology that maps directly to a strategy.
+        The one with the highest influence who is alive wins.
+        If there are no politicians, "flee" is used by default.
 
         Returns:
-            Tupla (strategy_str, winning_politician_or_None).
+            Tuple (strategy_str, winning_politician_or_None).
         """
         politicians = [
             a for a in self.agents
@@ -363,14 +363,14 @@ class Engine:
 
     def _infection_monitor_loop(self) -> None:
         """
-        Monitoriza agentes infectados y los convierte en zombis tras un retardo.
+        Monitors infected agents and converts them into zombies after a delay.
 
-        Implementa el período de incubación: un humano infectado no se
-        convierte inmediatamente, sino después de INFECTION_DELAY_TICKS ticks.
-        Esto evita race conditions al delegar la creación del nuevo Zombie
-        a un thread dedicado en lugar de hacerlo dentro del thread del agente.
+        Implements the incubation period: an infected human does not turn
+        immediately, but after INFECTION_DELAY_TICKS ticks.
+        This avoids race conditions by delegating the creation of the new Zombie
+        to a dedicated thread instead of doing it inside the agent's thread.
         """
-        infection_timers: dict = {}  # agent_id -> tick en que se infectó
+        infection_timers: dict = {}  # agent_id -> tick when infected
 
         while not game_over.is_set():
             time.sleep(0.3)
@@ -387,27 +387,27 @@ class Engine:
                     and agent.is_alive()
                 ):
                     if agent.agent_id not in infection_timers:
-                        # Primera vez que vemos este agente infectado
+                        # First time we see this infected agent
                         infection_timers[agent.agent_id] = self.tick
                     elif (
                         self.tick - infection_timers[agent.agent_id]
                         >= config.INFECTION_DELAY_TICKS
                     ):
-                        # Período de incubación cumplido → convertir
+                        # Incubation period complete → convert
                         infection_timers.pop(agent.agent_id, None)
                         if agent.is_alive():
                             self.convert_infected(agent)
 
-            # Limpiar timers de agentes que ya no existen
+            # Clean up timers for agents that no longer exist
             for aid in list(infection_timers.keys()):
                 if aid not in alive_ids:
                     del infection_timers[aid]
 
     def _win_condition_loop(self) -> None:
         """
-        Comprueba las condiciones de victoria/derrota periódicamente.
+        Checks victory/defeat conditions periodically.
 
-        Se ejecuta en un thread separado a intervalos de WIN_CHECK_INTERVAL.
+        Runs in a separate thread at WIN_CHECK_INTERVAL intervals.
         """
         while not game_over.is_set():
             time.sleep(config.WIN_CHECK_INTERVAL)
@@ -416,27 +416,27 @@ class Engine:
 
     def check_win_conditions(self) -> None:
         """
-        Evalúa si la simulación ha terminado.
+        Evaluates whether the simulation has ended.
 
-        Condiciones:
-        - Humanos ganan: no quedan zombis.
-        - Zombis ganan: no quedan humanos vivos NI infectados
-          (todos han muerto o convertido).
-        - Antídoto: antidote_ready activo → humanos ganan.
+        Conditions:
+        - Humans win: no zombies remain.
+        - Zombies win: no living humans NOR infected agents remain
+          (all have died or converted).
+        - Antidote: antidote_ready active → humans win.
 
-        Los infectados cuentan como humanos todavía vivos hasta que
-        se conviertan; esto evita declarar derrota durante la incubación.
+        Infected agents count as still-living humans until they convert;
+        this avoids declaring defeat during the incubation period.
         """
         counts = self.world.count_agents_by_type()
         self.n_zombies = counts.get("Zombie", 0)
 
-        # Humanos vivos = sanos + infectados (aún no convertidos)
+        # Living humans = healthy + infected (not yet converted)
         living_humans = sum(
             1 for a in self.agents
             if a.__class__.__name__ != "Zombie" and a.is_alive()
             and a.state != "dead"
         )
-        # Para el contador de la UI mostramos solo los no infectados
+        # For the UI counter we show only the non-infected
         self.n_humans = sum(
             1 for a in self.agents
             if a.__class__.__name__ != "Zombie" and a.is_alive()
@@ -457,10 +457,10 @@ class Engine:
 
     def _end_simulation(self, result: str) -> None:
         """
-        Finaliza la simulación con el resultado indicado.
+        Ends the simulation with the given result.
 
         Args:
-            result: "humans_win" o "zombies_win".
+            result: "humans_win" or "zombies_win".
         """
         self.result = result
         self.end_time = time.time()
@@ -468,24 +468,24 @@ class Engine:
         self.running = False
         self.world.push_event(
             "simulation_end",
-            f"Simulación terminada: {result} en tick {self.tick}",
+            f"Simulation ended: {result} at tick {self.tick}",
         )
 
     # ------------------------------------------------------------------
-    # Conversión de infectados
+    # Infected conversion
     # ------------------------------------------------------------------
 
     def convert_infected(self, human: Any) -> Zombie:
         """
-        Convierte un humano infectado en zombi.
+        Converts an infected human into a zombie.
 
-        Se ejecuta bajo el world.lock para evitar race conditions.
+        Runs under world.lock to avoid race conditions.
 
         Args:
-            human: Agente humano infectado.
+            human: Infected human agent.
 
         Returns:
-            El nuevo agente Zombie creado en la misma posición.
+            The new Zombie agent created at the same position.
         """
         pos = human.pos
         human.die()
@@ -501,25 +501,25 @@ class Engine:
         zombie.start()
         self.n_zombies += 1
 
-        self.world.push_event("infection", f"💀 Humano {human.agent_id} se convierte en zombi")
+        self.world.push_event("infection", f"💀 Human {human.agent_id} turns into a zombie")
         return zombie
 
     # ------------------------------------------------------------------
-    # Snapshot para UI/DB
+    # Snapshot for UI/DB
     # ------------------------------------------------------------------
 
     def get_snapshot(self) -> Dict[str, Any]:
         """
-        Retorna el estado actual de la simulación para la UI o la DB.
+        Returns the current simulation state for the UI or DB.
 
         Returns:
-            Dict con contadores, tick, resultado y snapshot del grid.
+            Dict with counters, tick, result and grid snapshot.
         """
         infected_count = sum(
             1 for a in self.agents
             if a.state == "infected" and a.__class__.__name__ != "Zombie"
         )
-        # Progreso del antídoto: el científico más avanzado
+        # Antidote progress: the most advanced scientist
         antidote_pct = 0
         from agents.human import Scientist
         scientists_in_lab = [
@@ -549,10 +549,10 @@ class Engine:
 
     def get_stats(self) -> Dict[str, Any]:
         """
-        Retorna estadísticas resumidas de la simulación actual.
+        Returns summary statistics of the current simulation.
 
         Returns:
-            Dict con métricas de la simulación.
+            Dict with simulation metrics.
         """
         duration = (
             (self.end_time or time.time()) - (self.start_time or time.time())

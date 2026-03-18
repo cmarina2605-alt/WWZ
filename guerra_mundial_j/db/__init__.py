@@ -1,24 +1,24 @@
 """
-db — Paquete de persistencia de datos de la simulación.
+db — Simulation data persistence package.
 
-Guarda los resultados de cada simulación en SQLite (simulations.db)
-para análisis posterior: qué estrategia gana más, sensibilidad a
-parámetros como p_infect, impacto del porcentaje de militares, etc.
+Saves the results of each simulation in SQLite (simulations.db)
+for later analysis: which strategy wins most, sensitivity to
+parameters like p_infect, impact of military percentage, etc.
 
-Módulos:
-    models.py   — Esquema SQL (CREATE TABLE), queries parametrizadas
-                  y queries de análisis estadístico.
-    database.py — Clase Database: wrapper thread-safe sobre sqlite3.
-                  Métodos: save_simulation, save_event, get_events,
+Modules:
+    models.py   — SQL schema (CREATE TABLE), parameterized queries
+                  and statistical analysis queries.
+    database.py — Database class: thread-safe wrapper over sqlite3.
+                  Methods: save_simulation, save_event, get_events,
                   update_simulation_result, load_simulation, etc.
-    stats.py    — Funciones de análisis: tasa de victoria por estrategia,
-                  sensibilidad a p_infect/visión, resumen en consola.
+    stats.py    — Analysis functions: win rate by strategy,
+                  sensitivity to p_infect/vision, console summary.
 
-Tablas SQLite:
-    simulations — Una fila por simulación: seed, parámetros, resultado,
-                  duración, conteos finales, tick final, timestamp.
-    events      — Una fila por evento clave (infección, muerte, antídoto...):
-                  sim_id (FK), event_type, tick, descripción.
+SQLite tables:
+    simulations — One row per simulation: seed, parameters, result,
+                  duration, final counts, final tick, timestamp.
+    events      — One row per key event (infection, death, antidote...):
+                  sim_id (FK), event_type, tick, description.
 """
 
 from db.database import Database

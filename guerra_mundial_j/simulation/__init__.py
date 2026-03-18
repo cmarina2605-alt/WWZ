@@ -1,24 +1,24 @@
 """
-simulation — Paquete del motor de simulación Guerra Mundial J.
+simulation — Guerra Mundial J simulation engine package.
 
-Contiene toda la lógica que hace correr la simulación:
+Contains all the logic that runs the simulation:
 
-    world.py    — El grid 2D compartido; todas las operaciones sobre él
-                  están protegidas por threading.Lock.
-    engine.py   — Orquestador: crea agentes, lanza threads, comprueba
-                  condiciones de victoria y convierte infectados en zombis.
-    movement.py — Cálculo de posiciones: huida de humanos, persecución de
-                  zombis, random walk y propagación de pánico social.
-    combat.py   — Resolución probabilística de encuentros humano↔zombi:
-                  escape / infección / muerte del humano / muerte del zombi.
+    world.py    — The shared 2D grid; all operations on it are
+                  protected by threading.Lock.
+    engine.py   — Orchestrator: creates agents, launches threads, checks
+                  victory conditions and converts infected agents into zombies.
+    movement.py — Position calculation: human fleeing, zombie chasing,
+                  random walk and social panic propagation.
+    combat.py   — Probabilistic resolution of human↔zombie encounters:
+                  escape / infection / human death / zombie death.
 
-Flujo principal:
+Main flow:
     Engine.start_simulation()
-        → _create_agents()  → coloca agentes en el grid
-        → _start_all_threads() → arranca un thread por agente
-        → _win_condition_loop  → comprueba victoria cada WIN_CHECK_INTERVAL s
-        → _tick_loop           → incrementa world.tick
-        → _infection_monitor_loop → convierte infectados tras INFECTION_DELAY_TICKS
+        → _create_agents()  → places agents on the grid
+        → _start_all_threads() → starts one thread per agent
+        → _win_condition_loop  → checks victory every WIN_CHECK_INTERVAL s
+        → _tick_loop           → increments world.tick
+        → _infection_monitor_loop → converts infected after INFECTION_DELAY_TICKS
 """
 
 from simulation.world import World

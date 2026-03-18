@@ -1,25 +1,24 @@
 """
-test_db.py — Tests de la capa de base de datos.
+test_db.py — Tests for the database layer.
 
-Usa ":memory:" (SQLite en RAM) para que los tests sean rápidos, aislados
-y no contaminen ni dependan del fichero simulations.db en disco.
+Uses ":memory:" (SQLite in RAM) so tests are fast, isolated,
+and do not pollute or depend on the simulations.db file on disk.
 
-Suites de tests:
-    TestSaveAndLoadSimulation   — save_simulation() retorna ID > 0; los datos
-                                  se recuperan intactos por seed; load_simulation
-                                  retorna None para seeds inexistentes; el conteo
-                                  de simulaciones es correcto.
-    TestSaveAndLoadEvents       — save_event() inserta sin errores; get_events()
-                                  retorna los eventos del sim_id correcto ordenados
-                                  por tick; los eventos de distintas simulaciones
-                                  no se mezclan.
-    TestUpdateSimulationResult  — update_simulation_result() actualiza result,
-                                  duration, humans_final y zombies_final correctamente.
-    TestStatsQueries            — analyze_strategies() retorna win rates por estrategia;
-                                  sensitivity_analysis('p_infect') retorna buckets;
-                                  parámetros inválidos lanzan ValueError;
-                                  get_best_strategy() retorna la estrategia ganadora
-                                  o None si la DB está vacía.
+Test suites:
+    TestSaveAndLoadSimulation   — save_simulation() returns ID > 0; data
+                                  is recovered intact by seed; load_simulation
+                                  returns None for non-existent seeds; simulation
+                                  count is correct.
+    TestSaveAndLoadEvents       — save_event() inserts without errors; get_events()
+                                  returns events for the correct sim_id ordered by
+                                  tick; events from different simulations don't mix.
+    TestUpdateSimulationResult  — update_simulation_result() updates result,
+                                  duration, humans_final and zombies_final correctly.
+    TestStatsQueries            — analyze_strategies() returns win rates by strategy;
+                                  sensitivity_analysis('p_infect') returns buckets;
+                                  invalid parameters raise ValueError;
+                                  get_best_strategy() returns the winning strategy
+                                  or None if the DB is empty.
 """
 
 import unittest
@@ -34,12 +33,12 @@ from db.stats import analyze_strategies, sensitivity_analysis, get_best_strategy
 
 
 def _make_db() -> Database:
-    """Crea una base de datos en memoria para cada test."""
+    """Creates an in-memory database for each test."""
     return Database(db_path=":memory:")
 
 
 def _sim_data(**overrides) -> dict:
-    """Genera un dict de datos de simulación con valores por defecto."""
+    """Generates a simulation data dict with default values."""
     base = {
         "seed": 42,
         "p_infect": 0.4,
@@ -61,17 +60,17 @@ def _sim_data(**overrides) -> dict:
 
 
 class TestSaveAndLoadSimulation(unittest.TestCase):
-    """Tests de guardado y carga de simulaciones."""
+    """Tests for saving and loading simulations."""
 
     def test_save_returns_id(self) -> None:
-        """save_simulation() retorna un entero positivo como ID."""
+        """save_simulation() returns a positive integer as ID."""
         db = _make_db()
         sim_id = db.save_simulation(_sim_data())
         self.assertIsInstance(sim_id, int)
         self.assertGreater(sim_id, 0)
 
     def test_load_by_seed(self) -> None:
-        """load_simulation(seed) retorna la simulación guardada."""
+        """load_simulation(seed) returns the saved simulation."""
         db = _make_db()
         data = _sim_data(seed=99)
         db.save_simulation(data)
@@ -80,19 +79,19 @@ class TestSaveAndLoadSimulation(unittest.TestCase):
         self.assertEqual(loaded["seed"], 99)
 
     def test_load_nonexistent_seed(self) -> None:
-        """load_simulation() retorna None si el seed no existe."""
+        """load_simulation() returns None if the seed doesn't exist."""
         db = _make_db()
         result = db.load_simulation(9999)
         self.assertIsNone(result)
 
     def test_get_all_simulations_empty(self) -> None:
-        """get_all_simulations() retorna lista vacía si no hay datos."""
+        """get_all_simulations() returns empty list if there is no data."""
         db = _make_db()
         sims = db.get_all_simulations()
         self.assertEqual(sims, [])
 
     def test_get_all_simulations_returns_list(self) -> None:
-        """get_all_simulations() retorna lista con todas las simulaciones."""
+        """get_all_simulations() returns list with all simulations."""
         db = _make_db()
         db.save_simulation(_sim_data(seed=1))
         db.save_simulation(_sim_data(seed=2))
@@ -101,7 +100,7 @@ class TestSaveAndLoadSimulation(unittest.TestCase):
         self.assertEqual(len(sims), 3)
 
     def test_simulation_data_integrity(self) -> None:
-        """Los datos guardados se recuperan intactos."""
+        """Saved data is recovered intact."""
         db = _make_db()
         data = _sim_data(
             seed=777,
@@ -121,7 +120,7 @@ class TestSaveAndLoadSimulation(unittest.TestCase):
         self.assertEqual(loaded["zombies_final"], 42)
 
     def test_simulation_count(self) -> None:
-        """get_simulation_count() retorna el número correcto."""
+        """get_simulation_count() returns the correct number."""
         db = _make_db()
         self.assertEqual(db.get_simulation_count(), 0)
         db.save_simulation(_sim_data())
@@ -130,39 +129,39 @@ class TestSaveAndLoadSimulation(unittest.TestCase):
 
 
 class TestSaveAndLoadEvents(unittest.TestCase):
-    """Tests de guardado y carga de eventos."""
+    """Tests for saving and loading events."""
 
     def test_save_event(self) -> None:
-        """save_event() no lanza excepciones."""
+        """save_event() does not raise exceptions."""
         db = _make_db()
         sim_id = db.save_simulation(_sim_data())
-        db.save_event(sim_id, "infection", tick=10, description="Humano infectado")
+        db.save_event(sim_id, "infection", tick=10, description="Human infected")
 
     def test_get_events_by_sim(self) -> None:
-        """get_events() retorna los eventos del sim_id correcto."""
+        """get_events() returns events for the correct sim_id."""
         db = _make_db()
         sim_id = db.save_simulation(_sim_data())
-        db.save_event(sim_id, "infection", 5, "Infectado A")
-        db.save_event(sim_id, "death", 10, "Muerto B")
-        db.save_event(sim_id, "escape", 15, "Escapó C")
+        db.save_event(sim_id, "infection", 5, "Infected A")
+        db.save_event(sim_id, "death", 10, "Dead B")
+        db.save_event(sim_id, "escape", 15, "Escaped C")
 
         events = db.get_events(sim_id)
         self.assertEqual(len(events), 3)
 
     def test_events_ordered_by_tick(self) -> None:
-        """Los eventos se retornan ordenados por tick."""
+        """Events are returned ordered by tick."""
         db = _make_db()
         sim_id = db.save_simulation(_sim_data())
-        db.save_event(sim_id, "death", 30, "Evento tarde")
-        db.save_event(sim_id, "infection", 5, "Evento temprano")
-        db.save_event(sim_id, "escape", 15, "Evento medio")
+        db.save_event(sim_id, "death", 30, "Late event")
+        db.save_event(sim_id, "infection", 5, "Early event")
+        db.save_event(sim_id, "escape", 15, "Mid event")
 
         events = db.get_events(sim_id)
         ticks = [e["tick"] for e in events]
         self.assertEqual(ticks, sorted(ticks))
 
     def test_events_isolated_by_sim(self) -> None:
-        """Los eventos de una simulación no aparecen en otra."""
+        """Events from one simulation don't appear in another."""
         db = _make_db()
         sim1 = db.save_simulation(_sim_data(seed=1))
         sim2 = db.save_simulation(_sim_data(seed=2))
@@ -179,7 +178,7 @@ class TestSaveAndLoadEvents(unittest.TestCase):
         self.assertEqual(events2[0]["event_type"], "death")
 
     def test_get_events_empty(self) -> None:
-        """get_events() retorna lista vacía para simulación sin eventos."""
+        """get_events() returns empty list for simulation with no events."""
         db = _make_db()
         sim_id = db.save_simulation(_sim_data())
         events = db.get_events(sim_id)
@@ -187,10 +186,10 @@ class TestSaveAndLoadEvents(unittest.TestCase):
 
 
 class TestUpdateSimulationResult(unittest.TestCase):
-    """Tests de actualización de resultados."""
+    """Tests for result updates."""
 
     def test_update_result(self) -> None:
-        """update_simulation_result() actualiza los campos correctamente."""
+        """update_simulation_result() updates fields correctly."""
         db = _make_db()
         sim_id = db.save_simulation(_sim_data(result=None))
 
@@ -211,10 +210,10 @@ class TestUpdateSimulationResult(unittest.TestCase):
 
 
 class TestStatsQueries(unittest.TestCase):
-    """Tests de las funciones de análisis estadístico."""
+    """Tests for statistical analysis functions."""
 
     def _populate_db(self, db: Database) -> None:
-        """Rellena la DB con datos de prueba variados."""
+        """Populates the DB with varied test data."""
         scenarios = [
             {"strategy": "flee", "result": "humans_win", "p_infect": 0.3},
             {"strategy": "flee", "result": "humans_win", "p_infect": 0.3},
@@ -228,7 +227,7 @@ class TestStatsQueries(unittest.TestCase):
             db.save_simulation(_sim_data(seed=i, **sc))
 
     def test_analyze_strategies_returns_dict(self) -> None:
-        """analyze_strategies() retorna un dict no vacío."""
+        """analyze_strategies() returns a non-empty dict."""
         db = _make_db()
         self._populate_db(db)
         result = analyze_strategies(db)
@@ -236,7 +235,7 @@ class TestStatsQueries(unittest.TestCase):
         self.assertGreater(len(result), 0)
 
     def test_analyze_strategies_has_flee(self) -> None:
-        """analyze_strategies() incluye la estrategia 'flee'."""
+        """analyze_strategies() includes the 'flee' strategy."""
         db = _make_db()
         self._populate_db(db)
         result = analyze_strategies(db)
@@ -244,7 +243,7 @@ class TestStatsQueries(unittest.TestCase):
         self.assertEqual(result["flee"]["total"], 3)
 
     def test_sensitivity_p_infect_returns_list(self) -> None:
-        """sensitivity_analysis('p_infect') retorna una lista."""
+        """sensitivity_analysis('p_infect') returns a list."""
         db = _make_db()
         self._populate_db(db)
         result = sensitivity_analysis("p_infect", db)
@@ -252,13 +251,13 @@ class TestStatsQueries(unittest.TestCase):
         self.assertGreater(len(result), 0)
 
     def test_sensitivity_invalid_param_raises(self) -> None:
-        """sensitivity_analysis() lanza ValueError con parámetro inválido."""
+        """sensitivity_analysis() raises ValueError with invalid parameter."""
         db = _make_db()
         with self.assertRaises(ValueError):
             sensitivity_analysis("invalid_param", db)
 
     def test_get_best_strategy(self) -> None:
-        """get_best_strategy() retorna el nombre de la estrategia ganadora."""
+        """get_best_strategy() returns the name of the winning strategy."""
         db = _make_db()
         self._populate_db(db)
         best = get_best_strategy(db)
@@ -266,7 +265,7 @@ class TestStatsQueries(unittest.TestCase):
         self.assertIsInstance(best, str)
 
     def test_get_best_strategy_empty_db(self) -> None:
-        """get_best_strategy() retorna None si la DB está vacía."""
+        """get_best_strategy() returns None if the DB is empty."""
         db = _make_db()
         best = get_best_strategy(db)
         self.assertIsNone(best)
