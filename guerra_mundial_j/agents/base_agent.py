@@ -132,6 +132,10 @@ class Agent(threading.Thread, ABC):
         """
         Changes the agent's state with validation.
 
+        Infected agents can only transition to "dead" — all other
+        state changes are silently ignored so the incubation period
+        is never cancelled by fear updates, panic spread, or combat.
+
         Args:
             new_state: New state. Must belong to VALID_STATES.
 
@@ -140,6 +144,8 @@ class Agent(threading.Thread, ABC):
         """
         if new_state not in self.VALID_STATES:
             raise ValueError(f"Invalid state: '{new_state}'. Valid states: {self.VALID_STATES}")
+        if self.state == "infected" and new_state != "dead":
+            return
         self.state = new_state
 
     def is_alive(self) -> bool:
