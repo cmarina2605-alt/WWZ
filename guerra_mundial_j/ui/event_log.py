@@ -64,7 +64,7 @@ class EventLog(tk.Frame):
             parent: Parent widget.
             max_lines: Maximum number of lines to keep in the log.
         """
-        super().__init__(parent, bg="#0d1117", padx=3, pady=3)
+        super().__init__(parent, bg="#0a0a14", padx=3, pady=3)
         self.max_lines: int = max_lines
         self._build_widget()
 
@@ -78,7 +78,7 @@ class EventLog(tk.Frame):
         title = tk.Label(
             self,
             text="📋 EVENT LOG",
-            bg="#0d1117",
+            bg="#0a0a14",
             fg="#58a6ff",
             font=("Consolas", 9, "bold"),
             anchor="w",
@@ -86,23 +86,32 @@ class EventLog(tk.Frame):
         title.pack(fill=tk.X, pady=(0, 2))
 
         # Text + scroll container frame
-        text_frame = tk.Frame(self, bg="#0d1117")
+        text_frame = tk.Frame(self, bg="#0a0a14")
         text_frame.pack(fill=tk.BOTH, expand=True)
 
-        scrollbar = tk.Scrollbar(text_frame, bg="#21262d", troughcolor="#161b22")
+        scrollbar = tk.Scrollbar(
+            text_frame,
+            bg="#1a1a2e",
+            troughcolor="#0a0a14",
+            relief=tk.FLAT,
+        )
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self._text = tk.Text(
             text_frame,
-            bg="#0d1117",
+            bg="#0a0a14",
             fg="#cccccc",
-            font=("Consolas", 8),
+            font=("Consolas", 9),
             wrap=tk.WORD,
             state=tk.DISABLED,
             yscrollcommand=scrollbar.set,
-            highlightthickness=0,
+            highlightthickness=1,
+            highlightbackground="#1e2a4a",
             relief=tk.FLAT,
             cursor="arrow",
+            padx=4,
+            pady=2,
+            spacing1=1,
         )
         self._text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self._text.yview)

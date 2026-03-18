@@ -1,26 +1,26 @@
 """
-combat.py — Resolución de encuentros entre humanos y zombis.
+combat.py — Resolution of encounters between humans and zombies.
 
-Cuando un humano y un zombi se encuentran en la misma celda o adyacentes,
-este módulo calcula probabilísticamente el resultado del enfrentamiento.
+When a human and a zombie meet on the same or adjacent cell,
+this module calculates the probabilistic outcome of the confrontation.
 
-Resultados posibles (Outcome):
-    "escape"         — el humano logra huir (set_state "running").
-    "human_infected" — el humano se infecta (human.infect()); el Engine
-                       lo convertirá en zombi tras el período de incubación.
-    "human_dies"     — el humano muere directamente (human.die()).
-    "zombie_dies"    — el zombi es eliminado (zombie.die()).
+Possible outcomes (Outcome):
+    "escape"         — the human manages to flee (set_state "running").
+    "human_infected" — the human is infected (human.infect()); the Engine
+                       will turn it into a zombie after the incubation period.
+    "human_dies"     — the human dies directly (human.die()).
+    "zombie_dies"    — the zombie is eliminated (zombie.die()).
 
-Factores que influyen en las probabilidades:
-    - force_ratio (humano / zombi): más fuerza relativa → más fácil escapar.
-    - age: si el humano supera AGE_PENALTY_THRESHOLD, aumenta p_infect.
-    - role: Military con munición suma +0.3 a p_zombie_dies; los no-militares
-      tienen p_zombie_dies reducida.
-    - Aleatoriedad base: el resultado siempre tiene componente aleatorio para
-      que la simulación sea impredecible.
+Factors influencing the probabilities:
+    - force_ratio (human / zombie): higher relative force → easier to escape.
+    - age: if the human exceeds AGE_PENALTY_THRESHOLD, p_infect increases.
+    - role: Military with ammo adds +0.3 to p_zombie_dies; non-military
+      have reduced p_zombie_dies.
+    - Base randomness: the outcome always has a random component so
+      the simulation remains unpredictable.
 
-Todos los efectos (morir, infectar, huir) se aplican directamente sobre
-los agentes, y se pushea un evento descriptivo al EventLog del world.
+All effects (dying, infecting, fleeing) are applied directly to
+the agents, and a descriptive event is pushed to the world's EventLog.
 """
 
 import random
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from agents.zombie import Zombie
     from simulation.world import World
 
-# Tipo de resultado de un encuentro
+# Type for the result of an encounter
 Outcome = Literal["escape", "human_dies", "human_infected", "zombie_dies"]
 
 
@@ -43,31 +43,31 @@ def resolve_encounter(
     world: "World",
 ) -> Outcome:
     """
-    Resuelve un encuentro entre un humano y un zombi.
+    Resolves an encounter between a human and a zombie.
 
-    La probabilidad de cada resultado depende de:
-    - force del humano y del zombi.
-    - age del humano (penalización si es mayor).
-    - role del humano (Military tiene bonus).
-    - Aleatoriedad base.
+    The probability of each outcome depends on:
+    - force of the human and the zombie.
+    - age of the human (penalty if elderly).
+    - role of the human (Military has bonus).
+    - Base randomness.
 
-    Los efectos secundarios se aplican directamente sobre los agentes
-    bajo world.lock cuando es necesario.
+    Side effects are applied directly to the agents
+    under world.lock when necessary.
 
     Args:
-        human: El agente humano involucrado.
-        zombie: El agente zombi involucrado.
-        world: El mundo compartido (para conversiones).
+        human: The human agent involved.
+        zombie: The zombie agent involved.
+        world: The shared world (for conversions).
 
     Returns:
-        Outcome: Resultado del encuentro.
+        Outcome: Result of the encounter.
     """
-    # Calcular probabilidades base
+    # Calculate base probabilities
     p_escape, p_infect, p_human_dies, p_zombie_dies = _calculate_probabilities(
         human, zombie
     )
 
-    # Normalizar (deben sumar 1)
+    # Normalize (must sum to 1)
     total = p_escape + p_infect + p_human_dies + p_zombie_dies
     if total <= 0:
         return "escape"
@@ -77,7 +77,7 @@ def resolve_encounter(
     p_human_dies /= total
     p_zombie_dies /= total
 
-    # Seleccionar resultado
+    # Select outcome
     roll = random.random()
     if roll < p_zombie_dies:
         outcome: Outcome = "zombie_dies"
@@ -88,7 +88,7 @@ def resolve_encounter(
     else:
         outcome = "human_dies"
 
-    # Aplicar efectos del resultado
+    # Apply outcome effects
     _apply_outcome(outcome, human, zombie, world)
     return outcome
 
@@ -98,33 +98,33 @@ def _calculate_probabilities(
     zombie: "Zombie",
 ) -> tuple[float, float, float, float]:
     """
-    Calcula las probabilidades brutas de cada resultado.
+    Calculates the raw probabilities of each outcome.
 
     Args:
-        human: Agente humano.
-        zombie: Agente zombi.
+        human: Human agent.
+        zombie: Zombie agent.
 
     Returns:
-        Tupla (p_escape, p_infect, p_human_dies, p_zombie_dies).
+        Tuple (p_escape, p_infect, p_human_dies, p_zombie_dies).
     """
     from agents.human import Military
 
-    # Fuerza relativa
+    # Relative force
     force_ratio = human.force / max(1, zombie.force)
 
-    # Probabilidad base de escape (más fuerza → más fácil escapar)
+    # Base escape probability (more force → easier to escape)
     p_escape = config.P_ESCAPE * force_ratio
     p_escape = min(0.7, max(0.05, p_escape))
 
-    # Probabilidad de infección
+    # Infection probability
     p_infect = config.P_INFECT
     if human.age > config.AGE_PENALTY_THRESHOLD:
-        p_infect += 0.1  # Más vulnerable si es mayor
+        p_infect += 0.1  # More vulnerable if elderly
 
-    # Probabilidad de que el humano muera directamente
+    # Probability that the human dies directly
     p_human_dies = max(0.05, 0.3 - force_ratio * 0.2)
 
-    # Probabilidad de que el zombi muera (solo Military con munición)
+    # Probability that the zombie dies (Military with ammo only)
     p_zombie_dies = config.P_KILL_ZOMBIE
     if isinstance(human, Military) and human.ammo > 0:
         p_zombie_dies += 0.3
@@ -142,54 +142,54 @@ def _apply_outcome(
     world: "World",
 ) -> None:
     """
-    Aplica los efectos de un resultado de combate sobre los agentes.
+    Applies the effects of a combat outcome to the agents.
 
     Args:
-        outcome: Resultado del encuentro.
-        human: Agente humano.
-        zombie: Agente zombi.
-        world: El mundo compartido.
+        outcome: Result of the encounter.
+        human: Human agent.
+        zombie: Zombie agent.
+        world: The shared world.
     """
-    from simulation.engine import Engine  # Import diferido para evitar circular
+    from simulation.engine import Engine  # Deferred import to avoid circular dependency
 
     if outcome == "escape":
         human.set_state("running")
-        world.push_event("escape", f"🏃 Humano {human.agent_id} escapó de Zombi {zombie.agent_id}")
+        world.push_event("escape", f"🏃 Human {human.agent_id} escaped from Zombie {zombie.agent_id}")
 
     elif outcome == "human_infected":
         human.infect()
         world.push_event(
             "infection",
-            f"🧟 Humano {human.agent_id} infectado por Zombi {zombie.agent_id}",
+            f"🧟 Human {human.agent_id} infected by Zombie {zombie.agent_id}",
         )
-        # La conversión real la gestiona Engine cuando detecta el estado "infected"
-        # para evitar problemas de concurrencia al crear nuevos threads
+        # The actual conversion is managed by Engine when it detects the "infected" state
+        # to avoid concurrency issues when creating new threads
 
     elif outcome == "human_dies":
         human.die()
-        world.push_event("death", f"💀 Humano {human.agent_id} murió a manos de Zombi {zombie.agent_id}")
+        world.push_event("death", f"💀 Human {human.agent_id} died at the hands of Zombie {zombie.agent_id}")
 
     elif outcome == "zombie_dies":
         zombie.die()
-        world.push_event("zombie_death", f"🔫 Zombi {zombie.agent_id} eliminado por Humano {human.agent_id}")
+        world.push_event("zombie_death", f"🔫 Zombie {zombie.agent_id} eliminated by Human {human.agent_id}")
 
 
 def combat_summary(outcome: Outcome, human_id: int, zombie_id: int) -> str:
     """
-    Genera una descripción legible del resultado de combate.
+    Generates a human-readable description of the combat outcome.
 
     Args:
-        outcome: Resultado del encuentro.
-        human_id: ID del humano.
-        zombie_id: ID del zombi.
+        outcome: Result of the encounter.
+        human_id: Human ID.
+        zombie_id: Zombie ID.
 
     Returns:
-        Cadena descriptiva del evento.
+        Descriptive string of the event.
     """
     messages = {
-        "escape": f"Humano #{human_id} escapó de Zombi #{zombie_id}",
-        "human_infected": f"Humano #{human_id} fue infectado por Zombi #{zombie_id}",
-        "human_dies": f"Humano #{human_id} murió frente a Zombi #{zombie_id}",
-        "zombie_dies": f"Zombi #{zombie_id} fue eliminado por Humano #{human_id}",
+        "escape": f"Human #{human_id} escaped from Zombie #{zombie_id}",
+        "human_infected": f"Human #{human_id} was infected by Zombie #{zombie_id}",
+        "human_dies": f"Human #{human_id} died facing Zombie #{zombie_id}",
+        "zombie_dies": f"Zombie #{zombie_id} was eliminated by Human #{human_id}",
     }
-    return messages.get(outcome, f"Encuentro desconocido entre #{human_id} y #{zombie_id}")
+    return messages.get(outcome, f"Unknown encounter between #{human_id} and #{zombie_id}")

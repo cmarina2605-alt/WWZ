@@ -1,28 +1,28 @@
 """
-main.py — Punto de entrada de la simulación Guerra Mundial J.
+main.py — Entry point for the Guerra Mundial J simulation.
 
-Este fichero es el único que debe ejecutarse directamente. Parsea los
-argumentos de línea de comandos y lanza uno de los dos modos:
+This file is the only one that should be executed directly. It parses
+command-line arguments and launches one of two modes:
 
-Modo UI (por defecto):
-    Lanza la interfaz gráfica Tkinter. El usuario puede iniciar, pausar
-    y reiniciar la simulación, ajustar parámetros con sliders y observar
-    el grid en tiempo real junto al log de eventos y las estadísticas.
+UI Mode (default):
+    Launches the Tkinter graphical interface. The user can start, pause
+    and restart the simulation, adjust parameters with sliders and observe
+    the grid in real time alongside the event log and statistics.
 
-Modo Batch (--no-ui):
-    Ejecuta N simulaciones sin interfaz gráfica y guarda los resultados
-    en simulations.db para análisis posterior con --stats.
+Batch Mode (--no-ui):
+    Runs N simulations without a graphical interface and saves the results
+    to simulations.db for later analysis with --stats.
 
-Argumentos disponibles:
-    --no-ui              Modo headless (sin ventana Tkinter).
-    --seed INT           Semilla aleatoria para reproducibilidad.
-    --batch INT          Número de simulaciones en modo batch (default: 1).
-    --strategy STR       Estrategia humana: flee | group | military_first | random.
-    --p-infect FLOAT     Probabilidad de infección en encuentros (0.0–1.0).
-    --humans INT         Número de humanos al inicio de la simulación.
-    --stats              Muestra resumen estadístico de la DB y sale.
+Available arguments:
+    --no-ui              Headless mode (no Tkinter window).
+    --seed INT           Random seed for reproducibility.
+    --batch INT          Number of simulations in batch mode (default: 1).
+    --strategy STR       Human strategy: flee | group | military_first | random.
+    --p-infect FLOAT     Infection probability in encounters (0.0–1.0).
+    --humans INT         Number of humans at the start of the simulation.
+    --stats              Display statistical summary from the DB and exit.
 
-Ejemplos:
+Examples:
     python main.py
     python main.py --no-ui --batch 50
     python main.py --seed 12345
@@ -43,16 +43,16 @@ from db.stats import print_summary
 
 def parse_args() -> argparse.Namespace:
     """
-    Parsea los argumentos de línea de comandos.
+    Parses command-line arguments.
 
     Returns:
-        Namespace con los argumentos parseados.
+        Namespace with the parsed arguments.
     """
     parser = argparse.ArgumentParser(
-        description="Guerra Mundial J — Simulación multithread Humanos vs Zombis",
+        description="Guerra Mundial J — Multithreaded Humans vs Zombies Simulation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Ejemplos:
+Examples:
   python main.py
   python main.py --no-ui --batch 50
   python main.py --seed 12345
@@ -64,44 +64,44 @@ Ejemplos:
         "--no-ui",
         action="store_true",
         default=False,
-        help="Ejecutar en modo batch sin interfaz gráfica.",
+        help="Run in batch mode without a graphical interface.",
     )
     parser.add_argument(
         "--seed",
         type=int,
         default=None,
-        help="Semilla aleatoria para reproducibilidad.",
+        help="Random seed for reproducibility.",
     )
     parser.add_argument(
         "--batch",
         type=int,
         default=1,
-        help="Número de simulaciones a ejecutar en modo batch (default: 1).",
+        help="Number of simulations to run in batch mode (default: 1).",
     )
     parser.add_argument(
         "--strategy",
         type=str,
         default="flee",
         choices=config.STRATEGIES,
-        help=f"Estrategia de comportamiento humano. Opciones: {config.STRATEGIES}",
+        help=f"Human behavior strategy. Options: {config.STRATEGIES}",
     )
     parser.add_argument(
         "--p-infect",
         type=float,
         default=config.P_INFECT,
-        help=f"Probabilidad de infección (default: {config.P_INFECT}).",
+        help=f"Infection probability (default: {config.P_INFECT}).",
     )
     parser.add_argument(
         "--humans",
         type=int,
         default=config.NUM_HUMANS,
-        help=f"Número de humanos iniciales (default: {config.NUM_HUMANS}).",
+        help=f"Initial number of humans (default: {config.NUM_HUMANS}).",
     )
     parser.add_argument(
         "--stats",
         action="store_true",
         default=False,
-        help="Mostrar resumen estadístico de simulaciones previas y salir.",
+        help="Display statistical summary of previous simulations and exit.",
     )
 
     return parser.parse_args()
@@ -115,18 +115,18 @@ def run_batch(
     n_humans: int,
 ) -> None:
     """
-    Ejecuta N simulaciones en modo batch y guarda resultados en la DB.
+    Runs N simulations in batch mode and saves results to the DB.
 
     Args:
-        n: Número de simulaciones a ejecutar.
-        seed: Semilla base (None = aleatoria). Si se proporciona,
-              se incrementa en 1 para cada simulación.
-        strategy: Estrategia de comportamiento humano.
-        p_infect: Probabilidad de infección.
-        n_humans: Número inicial de humanos.
+        n: Number of simulations to run.
+        seed: Base seed (None = random). If provided,
+              it is incremented by 1 for each simulation.
+        strategy: Human behavior strategy.
+        p_infect: Infection probability.
+        n_humans: Initial number of humans.
     """
     db = Database()
-    print(f"\n[Batch] Iniciando {n} simulaciones | strategy={strategy} | p_infect={p_infect}")
+    print(f"\n[Batch] Starting {n} simulations | strategy={strategy} | p_infect={p_infect}")
     print("-" * 60)
 
     for i in range(n):
@@ -139,7 +139,7 @@ def run_batch(
         )
         engine.start_simulation()
 
-        # Esperar a que termine (máx. 120 segundos por simulación)
+        # Wait for it to finish (max. 120 seconds per simulation)
         timeout = 120.0
         start_t = time.time()
         while engine.running and (time.time() - start_t) < timeout:
@@ -174,22 +174,22 @@ def run_batch(
 
 def run_ui(seed: int | None, strategy: str, p_infect: float, n_humans: int) -> None:
     """
-    Lanza la simulación con interfaz gráfica Tkinter.
+    Launches the simulation with the Tkinter graphical interface.
 
     Args:
-        seed: Semilla aleatoria (None = aleatoria).
-        strategy: Estrategia de comportamiento humano.
-        p_infect: Probabilidad de infección.
-        n_humans: Número inicial de humanos.
+        seed: Random seed (None = random).
+        strategy: Human behavior strategy.
+        p_infect: Infection probability.
+        n_humans: Initial number of humans.
     """
     try:
         import tkinter as tk
-        # Verificar que Tkinter funciona antes de importar App
+        # Verify that Tkinter works before importing App
         test_root = tk.Tk()
         test_root.destroy()
     except Exception as exc:
-        print(f"[Error] No se puede iniciar la UI Tkinter: {exc}")
-        print("  Usa --no-ui para el modo batch.")
+        print(f"[Error] Cannot start the Tkinter UI: {exc}")
+        print("  Use --no-ui for batch mode.")
         sys.exit(1)
 
     from ui.app import App
@@ -206,18 +206,18 @@ def run_ui(seed: int | None, strategy: str, p_infect: float, n_humans: int) -> N
 
 def main() -> None:
     """
-    Función principal: parsea argumentos y lanza el modo correspondiente.
+    Main function: parses arguments and launches the corresponding mode.
     """
     args = parse_args()
 
-    # Modo estadísticas
+    # Statistics mode
     if args.stats:
         db = Database()
         print_summary(db)
         db.close()
         return
 
-    # Aplicar parámetros de CLI a config
+    # Apply CLI parameters to config
     config.P_INFECT = args.p_infect
     config.NUM_HUMANS = args.humans
 

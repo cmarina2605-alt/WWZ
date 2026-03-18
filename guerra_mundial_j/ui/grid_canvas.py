@@ -146,6 +146,7 @@ class GridCanvas(tk.Canvas):
         self.canvas_size: int = size
         self.cell_size: float = size / config.GRID_SIZE
         self._rect_ids: Dict[Tuple[int, int], int] = {}
+        self._cell_shape: Dict[Tuple[int, int], str] = {}  # "oval" | "rect"
 
         # Draw static map (layers 1-5)
         self._draw_usa_background()
@@ -265,11 +266,12 @@ class GridCanvas(tk.Canvas):
         """
         Updates visible agents from the Engine snapshot.
 
-        Clears cells that no longer have an agent (deletes the rectangle so
+        Clears cells that no longer have an agent (deletes the item so
         the underlying map is visible) and draws/updates new ones.
+        Agents below the overlay tag are inserted beneath it.
 
         Args:
-            snapshot: Dict of {(x, y): {"color": str, ...}} from World.
+            snapshot: Dict of {(x, y): {"color", "type", "role", "state"}} from World.
         """
         stale = set(self._rect_ids.keys()) - set(snapshot.keys())
         for pos in stale:
@@ -277,36 +279,112 @@ class GridCanvas(tk.Canvas):
 
         for pos, agent_data in snapshot.items():
             color = agent_data.get("color", config.COLOR_NORMAL)
-            self._draw_cell(pos, color)
+            agent_type = agent_data.get("type", "")
+            self._draw_cell(pos, color, agent_type)
 
-    def _draw_cell(self, pos: Tuple[int, int], color: str) -> None:
-        """Draws or updates an agent's rectangle."""
-        x1 = pos[0] * self.cell_size
-        y1 = pos[1] * self.cell_size
-        x2 = x1 + self.cell_size
-        y2 = y1 + self.cell_size
+    def _draw_cell(self, pos: Tuple[int, int], color: str, agent_type: str = "") -> None:
+        """Draws or updates an agent's shape (oval for zombies, rect for humans)."""
+        cs = self.cell_size
+        pad = max(0.5, cs * 0.08)
+        x1 = pos[0] * cs + pad
+        y1 = pos[1] * cs + pad
+        x2 = pos[0] * cs + cs - pad
+        y2 = pos[1] * cs + cs - pad
+
+        shape = "oval" if agent_type == "Zombie" else "rect"
 
         if pos in self._rect_ids:
-            self.itemconfig(self._rect_ids[pos], fill=color)
+            if self._cell_shape.get(pos) != shape:
+                # Shape changed — delete old and recreate
+                self.delete(self._rect_ids[pos])
+                del self._rect_ids[pos]
+                del self._cell_shape[pos]
+            else:
+                self.itemconfig(self._rect_ids[pos], fill=color)
+                return
+
+        # Create new item below any overlay
+        if shape == "oval":
+            item_id = self.create_oval(x1, y1, x2, y2, fill=color, outline="")
         else:
-            rect_id = self.create_rectangle(
-                x1, y1, x2, y2,
-                fill=color,
-                outline="",
-            )
-            self._rect_ids[pos] = rect_id
+            item_id = self.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
+
+        # Keep agents below the overlay layer (only if overlay exists)
+        try:
+            self.tag_lower(item_id, "overlay")
+        except Exception:
+            pass
+        self._rect_ids[pos] = item_id
+        self._cell_shape[pos] = shape
 
     def _clear_cell(self, pos: Tuple[int, int]) -> None:
-        """Removes an agent's rectangle to expose the map."""
+        """Removes an agent's shape to expose the map."""
         if pos in self._rect_ids:
             self.delete(self._rect_ids[pos])
             del self._rect_ids[pos]
+            self._cell_shape.pop(pos, None)
 
     def clear(self) -> None:
-        """Removes all agent rectangles (without touching the base map)."""
-        for rect_id in self._rect_ids.values():
-            self.delete(rect_id)
+        """Removes all agent shapes (without touching the base map)."""
+        for item_id in self._rect_ids.values():
+            self.delete(item_id)
         self._rect_ids.clear()
+        self._cell_shape.clear()
+
+    def show_game_over(self, result: str) -> None:
+        """
+        Draws a dramatic overlay announcing the simulation result.
+
+        Args:
+            result: "humans_win" or "zombies_win".
+        """
+        self.delete("overlay")
+        w = self.canvas_size
+        h = self.canvas_size
+
+        if result == "humans_win":
+            bg     = "#001833"
+            title  = "HUMANITY SURVIVES!"
+            sub    = "The antidote has been found"
+            color  = "#00ff88"
+        else:
+            bg     = "#1a0000"
+            title  = "ZOMBIES WIN!"
+            sub    = "The infection has consumed the nation"
+            color  = "#ff4444"
+
+        # Semi-transparent dark veil
+        self.create_rectangle(
+            0, 0, w, h,
+            fill=bg, outline="", stipple="gray75",
+            tags="overlay",
+        )
+        # Decorative box
+        self.create_rectangle(
+            w // 4, h // 2 - 60, 3 * w // 4, h // 2 + 60,
+            fill="#000000", outline=color, width=2, stipple="gray50",
+            tags="overlay",
+        )
+        # Main result text
+        self.create_text(
+            w // 2, h // 2 - 18,
+            text=title,
+            fill=color,
+            font=("Consolas", 20, "bold"),
+            tags="overlay",
+        )
+        # Sub-text
+        self.create_text(
+            w // 2, h // 2 + 18,
+            text=sub,
+            fill="#aaaaaa",
+            font=("Consolas", 10),
+            tags="overlay",
+        )
+
+    def clear_overlay(self) -> None:
+        """Removes the game-over overlay."""
+        self.delete("overlay")
 
     # ------------------------------------------------------------------
     # Utilities

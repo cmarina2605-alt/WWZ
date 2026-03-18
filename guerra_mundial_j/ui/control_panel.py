@@ -56,7 +56,7 @@ class ControlPanel(tk.Frame):
             parent: Parent widget.
             app: Reference to the main App for calling actions.
         """
-        super().__init__(parent, bg="#16213e", padx=5, pady=5)
+        super().__init__(parent, bg="#0d1117", padx=6, pady=6)
         self.app: "App" = app
         self._build_buttons()
         self._build_sliders()
@@ -67,48 +67,61 @@ class ControlPanel(tk.Frame):
 
     def _build_buttons(self) -> None:
         """Builds the control button row."""
-        btn_frame = tk.Frame(self, bg="#16213e")
-        btn_frame.pack(fill=tk.X, pady=(0, 8))
+        # Title
+        tk.Label(
+            self, text="⚙ CONTROLS",
+            bg="#0d1117", fg="#58a6ff",
+            font=("Consolas", 9, "bold"), anchor="w",
+        ).pack(fill=tk.X, pady=(0, 5))
+
+        btn_frame = tk.Frame(self, bg="#0d1117")
+        btn_frame.pack(fill=tk.X, pady=(0, 6))
 
         btn_style = {
             "font": ("Consolas", 10, "bold"),
             "relief": tk.FLAT,
-            "padx": 8,
-            "pady": 4,
+            "padx": 10,
+            "pady": 5,
             "cursor": "hand2",
+            "activeforeground": "white",
+            "bd": 0,
         }
 
         self.btn_start = tk.Button(
-            btn_frame, text="▶ Start",
-            bg="#0f3460", fg="white",
+            btn_frame, text="▶  Start",
+            bg="#0d4a28", fg="#40c870",
+            activebackground="#1a6a3a",
             command=self.app.action_start,
             **btn_style,
         )
-        self.btn_start.pack(side=tk.LEFT, padx=2)
+        self.btn_start.pack(side=tk.LEFT, padx=(0, 3))
 
         self.btn_pause = tk.Button(
-            btn_frame, text="⏸ Pause",
-            bg="#533483", fg="white",
+            btn_frame, text="⏸  Pause",
+            bg="#2a1a4a", fg="#c084fc",
+            activebackground="#3a2a6a",
             command=self.app.action_pause,
             **btn_style,
         )
-        self.btn_pause.pack(side=tk.LEFT, padx=2)
+        self.btn_pause.pack(side=tk.LEFT, padx=3)
 
         self.btn_reset = tk.Button(
-            btn_frame, text="🔄 Reset",
-            bg="#e94560", fg="white",
+            btn_frame, text="↺  Reset",
+            bg="#4a0d1a", fg="#e05252",
+            activebackground="#6a1a28",
             command=self.app.action_reset,
             **btn_style,
         )
-        self.btn_reset.pack(side=tk.LEFT, padx=2)
+        self.btn_reset.pack(side=tk.LEFT, padx=3)
 
         self.btn_batch = tk.Button(
             btn_frame, text="⚙ Batch×100",
-            bg="#1a472a", fg="white",
+            bg="#1a2a1a", fg="#888888",
+            activebackground="#263426",
             command=lambda: self.app.action_run_batch(100),
             **btn_style,
         )
-        self.btn_batch.pack(side=tk.LEFT, padx=2)
+        self.btn_batch.pack(side=tk.LEFT, padx=3)
 
     # ------------------------------------------------------------------
     # Slider construction
@@ -116,7 +129,13 @@ class ControlPanel(tk.Frame):
 
     def _build_sliders(self) -> None:
         """Builds the parameter adjustment sliders."""
-        slider_frame = tk.Frame(self, bg="#16213e")
+        tk.Label(
+            self, text="Adjust parameters (live):",
+            bg="#0d1117", fg="#555555",
+            font=("Consolas", 7), anchor="w",
+        ).pack(fill=tk.X, pady=(0, 2))
+
+        slider_frame = tk.Frame(self, bg="#0d1117")
         slider_frame.pack(fill=tk.X)
 
         self._sliders: dict = {}
@@ -161,12 +180,12 @@ class ControlPanel(tk.Frame):
         ]
 
         for sd in slider_defs:
-            row = tk.Frame(slider_frame, bg="#16213e")
+            row = tk.Frame(slider_frame, bg="#0d1117")
             row.pack(fill=tk.X, pady=1)
 
             tk.Label(
                 row, text=f"{sd['label']:<14}",
-                bg="#16213e", fg="#aaaaaa",
+                bg="#0d1117", fg="#aaaaaa",
                 font=("Consolas", 9),
                 width=14, anchor="w",
             ).pack(side=tk.LEFT)
@@ -179,9 +198,10 @@ class ControlPanel(tk.Frame):
                 to=sd["to"],
                 resolution=sd["resolution"],
                 orient=tk.HORIZONTAL,
-                length=180,
-                bg="#16213e", fg="white",
-                troughcolor="#0f3460",
+                length=190,
+                bg="#0d1117", fg="#aaaaaa",
+                troughcolor="#1a2a4a",
+                activebackground="#4e9eff",
                 highlightthickness=0,
                 command=sd["callback"],
                 showvalue=True,
@@ -246,10 +266,10 @@ class ControlPanel(tk.Frame):
             paused: True if paused.
         """
         if running and not paused:
-            self.btn_start.config(state=tk.DISABLED)
-            self.btn_pause.config(text="⏸ Pause")
+            self.btn_start.config(state=tk.DISABLED, fg="#555555")
+            self.btn_pause.config(text="⏸  Pause", fg="#c084fc")
         elif running and paused:
-            self.btn_pause.config(text="▶ Resume")
+            self.btn_pause.config(text="▶  Resume", fg="#40c870")
         else:
-            self.btn_start.config(state=tk.NORMAL)
-            self.btn_pause.config(text="⏸ Pause")
+            self.btn_start.config(state=tk.NORMAL, fg="#40c870")
+            self.btn_pause.config(text="⏸  Pause", fg="#c084fc")

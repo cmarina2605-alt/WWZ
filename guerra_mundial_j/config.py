@@ -1,129 +1,128 @@
 """
-config.py — Constantes globales de la simulación Guerra Mundial J.
+config.py — Global constants for the Guerra Mundial J simulation.
 
-Este fichero centraliza TODOS los parámetros configurables de la
-simulación. Cualquier ajuste de comportamiento (velocidad, probabilidades,
-tamaño del mundo, colores de la UI) se hace aquí, sin tocar la lógica
-de los agentes ni del motor.
+This file centralizes ALL configurable parameters of the simulation.
+Any behavior adjustment (speed, probabilities, world size, UI colors)
+is made here, without touching the agent or engine logic.
 
-Secciones:
-    - Dimensiones del mundo: tamaño del grid 2D.
-    - Población inicial: número de humanos por rol y zombis al arrancar.
-    - Localizaciones clave: posiciones fijas de LAB, Casa Blanca y base militar.
-    - Parámetros de probabilidad: infección, huida, matar zombi.
-    - Visión: radios de detección para humanos y zombis.
-    - Tiempos: velocidad base de tick, intervalos de comprobación,
-      ticks para el antídoto y período de incubación de infectados.
-    - Colores UI: strings de color Tkinter por tipo de agente.
-    - Parámetros de combate: bonus militar, umbrales de fuerza y edad.
-    - Base de datos: ruta del fichero SQLite.
-    - UI: dimensiones de ventana y frecuencia de refresco.
-    - Estrategias: lista de estrategias disponibles para runs batch.
+Sections:
+    - World dimensions: 2D grid size.
+    - Initial population: number of humans per role and zombies at start.
+    - Key locations: fixed positions of LAB, White House and military base.
+    - Probability parameters: infection, escape, kill zombie.
+    - Vision: detection radii for humans and zombies.
+    - Timing: base tick speed, check intervals,
+      ticks for the antidote and incubation period for infected agents.
+    - UI colors: Tkinter color strings per agent type.
+    - Combat parameters: military bonus, force and age thresholds.
+    - Database: path to the SQLite file.
+    - UI: window dimensions and refresh rate.
+    - Strategies: list of available strategies for batch runs.
 """
 
 # ---------------------------------------------------------------------------
-# Dimensiones del mundo
+# World dimensions
 # ---------------------------------------------------------------------------
-GRID_SIZE: int = 100          # Lado del grid cuadrado (celdas)
+GRID_SIZE: int = 100          # Side of the square grid (cells)
 
 # ---------------------------------------------------------------------------
-# Población inicial
+# Initial population
 # ---------------------------------------------------------------------------
-NUM_HUMANS: int = 100         # Número de humanos al inicio
-NUM_ZOMBIES: int = 1          # Número de zombis al inicio
-NUM_SCIENTISTS: int = 5       # Subconjunto de humanos tipo Scientist
-NUM_MILITARY: int = 10        # Subconjunto de humanos tipo Military
-NUM_POLITICIANS: int = 2      # Subconjunto de humanos tipo Politician
+NUM_HUMANS: int = 100         # Number of humans at the start
+NUM_ZOMBIES: int = 1          # Number of zombies at the start
+NUM_SCIENTISTS: int = 5       # Subset of humans of type Scientist
+NUM_MILITARY: int = 10        # Subset of humans of type Military
+NUM_POLITICIANS: int = 2      # Subset of humans of type Politician
 
 # ---------------------------------------------------------------------------
-# Localizaciones clave del mapa de EEUU (x=oeste-este, y=norte-sur, grid 0-99)
+# Key locations on the US map (x=west-east, y=north-south, grid 0-99)
 # ---------------------------------------------------------------------------
-OUTBREAK_POS: tuple = (5, 74)       # San Diego, CA — origen del brote (José)
-LAB_POS: tuple = (68, 62)           # CDC Atlanta, GA — base científica
-LAB_RADIUS: int = 3                 # Radio de detección del laboratorio (celdas)
-WHITEHOUSE_POS: tuple = (80, 40)    # Washington D.C. — Casa Blanca
-MILITARY_BASE_POS: tuple = (76, 55) # Fort Bragg, NC — base militar
+OUTBREAK_POS: tuple = (5, 74)       # San Diego, CA — outbreak origin (José)
+LAB_POS: tuple = (68, 62)           # CDC Atlanta, GA — science base
+LAB_RADIUS: int = 3                 # Laboratory detection radius (cells)
+WHITEHOUSE_POS: tuple = (80, 40)    # Washington D.C. — White House
+MILITARY_BASE_POS: tuple = (76, 55) # Fort Bragg, NC — military base
 
 # ---------------------------------------------------------------------------
-# Colores del mapa geográfico (UI)
+# Geographic map colors (UI)
 # ---------------------------------------------------------------------------
-OCEAN_COLOR: str = "#0a2040"        # Fondo océano
-LAND_COLOR: str = "#2d5a27"         # Territorio continental
-LAND_BORDER_COLOR: str = "#4a8a42"  # Contorno y fronteras estatales
-LAKE_COLOR: str = "#1a4a6b"         # Grandes Lagos
+OCEAN_COLOR: str = "#0a2040"        # Ocean background
+LAND_COLOR: str = "#2d5a27"         # Continental territory
+LAND_BORDER_COLOR: str = "#4a8a42"  # Outline and state borders
+LAKE_COLOR: str = "#1a4a6b"         # Great Lakes
 
 # ---------------------------------------------------------------------------
-# Parámetros de probabilidad
+# Probability parameters
 # ---------------------------------------------------------------------------
-P_INFECT: float = 0.15        # Probabilidad de infección en encuentro
-P_KILL_ZOMBIE: float = 0.2    # Probabilidad de que un humano mate al zombi
-P_ESCAPE: float = 0.3         # Probabilidad base de escapar
+P_INFECT: float = 0.15        # Infection probability in an encounter
+P_KILL_ZOMBIE: float = 0.2    # Probability that a human kills the zombie
+P_ESCAPE: float = 0.3         # Base escape probability
 
 # ---------------------------------------------------------------------------
-# Visión / rango de detección (en celdas)
+# Vision / detection range (in cells)
 # ---------------------------------------------------------------------------
-VISION_HUMAN: int = 10        # Radio de visión de un humano
-VISION_ZOMBIE: int = 15       # Radio de visión de un zombi
+VISION_HUMAN: int = 10        # Human vision radius
+VISION_ZOMBIE: int = 15       # Zombie vision radius
 
 # ---------------------------------------------------------------------------
-# Tiempos
+# Timing
 # ---------------------------------------------------------------------------
-TICK_SPEED: float = 0.1       # Segundos entre ticks de cada agente (base)
-WIN_CHECK_INTERVAL: float = 1.0   # Segundos entre comprobaciones de victoria
-ANTIDOTE_TICKS: int = 500     # Ticks necesarios para que un Scientist complete antídoto
-INFECTION_DELAY_TICKS: int = 50   # Ticks de incubación antes de que un infectado se convierta
+TICK_SPEED: float = 0.1       # Seconds between ticks per agent (base)
+WIN_CHECK_INTERVAL: float = 1.0   # Seconds between victory condition checks
+ANTIDOTE_TICKS: int = 500     # Ticks needed for a Scientist to complete the antidote
+INFECTION_DELAY_TICKS: int = 50   # Incubation ticks before an infected agent turns
 
 # ---------------------------------------------------------------------------
-# Colores de la UI (Tkinter color strings)
+# UI colors (hex)
 # ---------------------------------------------------------------------------
-COLOR_ZOMBIE: str = "yellow"
-COLOR_NORMAL: str = "red"
-COLOR_MILITARY: str = "green"
-COLOR_SCIENTIST: str = "purple"
-COLOR_POLITICIAN: str = "blue"
-COLOR_INFECTED: str = "orange"
-COLOR_DEAD: str = "gray"
-COLOR_EMPTY: str = "#1a1a2e"   # Fondo oscuro
+COLOR_ZOMBIE: str = "#f5e150"      # Canary yellow
+COLOR_NORMAL: str = "#e05252"      # Warm red
+COLOR_MILITARY: str = "#40c870"    # Vibrant green
+COLOR_SCIENTIST: str = "#c084fc"   # Soft purple
+COLOR_POLITICIAN: str = "#4e9eff"  # Sky blue
+COLOR_INFECTED: str = "#ff9020"    # Amber orange
+COLOR_DEAD: str = "#4a4a4a"        # Dark gray
+COLOR_EMPTY: str = "#1a1a2e"       # Dark background
 
 # ---------------------------------------------------------------------------
-# Parámetros de combate
+# Combat parameters
 # ---------------------------------------------------------------------------
 FORCE_MILITARY_BONUS: int = 20
-FORCE_FLEE_THRESHOLD: int = 60  # Por encima de este valor Military no huye
-AGE_PENALTY_THRESHOLD: int = 60 # A partir de esta edad la fuerza decae
+FORCE_FLEE_THRESHOLD: int = 60  # Above this value Military does not flee
+AGE_PENALTY_THRESHOLD: int = 60 # From this age onward force decays
 
 # ---------------------------------------------------------------------------
-# Base de datos
+# Database
 # ---------------------------------------------------------------------------
 DB_PATH: str = "simulations.db"
 
 # ---------------------------------------------------------------------------
 # UI
 # ---------------------------------------------------------------------------
-WINDOW_WIDTH: int = 1200
-WINDOW_HEIGHT: int = 700
-CANVAS_SIZE: int = 600        # Tamaño en píxeles del canvas del grid
-UI_REFRESH_MS: int = 100      # Milisegundos entre refrescos de la UI
+WINDOW_WIDTH: int = 1420
+WINDOW_HEIGHT: int = 760
+CANVAS_SIZE: int = 700        # Grid canvas size in pixels
+UI_REFRESH_MS: int = 80       # Milliseconds between UI refreshes
 
 # ---------------------------------------------------------------------------
-# Mecánica de alerta nacional / Casa Blanca
+# National alert / White House mechanic
 # ---------------------------------------------------------------------------
-# La fórmula es: delay = max(MIN_ALERT_DELAY, BASE - K * num_en_panico)
-# Cuanta más gente en pánico haya cuando el político emite la alerta,
-# antes llega el mensaje a la Casa Blanca.
-WHITEHOUSE_DELAY_BASE: int = 60    # Ticks base hasta que llega el mensaje
-WHITEHOUSE_DELAY_K: float = 0.5    # Reducción de ticks por persona en pánico
-MIN_ALERT_DELAY: int = 10          # Mínimo de ticks de espera (siempre hay burocracia)
+# Formula: delay = max(MIN_ALERT_DELAY, BASE - K * num_panicking)
+# The more people in panic when the politician sends the alert,
+# the faster the message reaches the White House.
+WHITEHOUSE_DELAY_BASE: int = 60    # Base ticks until the message arrives
+WHITEHOUSE_DELAY_K: float = 0.5    # Tick reduction per panicking person
+MIN_ALERT_DELAY: int = 10          # Minimum wait ticks (bureaucracy is always there)
 
 # ---------------------------------------------------------------------------
-# Estrategias disponibles
+# Available strategies
 # ---------------------------------------------------------------------------
 STRATEGIES: list[str] = ["random", "flee", "group", "military_first"]
 
-# Descripciones narrativas de cada estrategia (para el EventLog)
+# Narrative descriptions of each strategy (for the EventLog)
 STRATEGY_DESCRIPTIONS: dict = {
-    "flee":           "🏃 Protocolo EVACUACIÓN — huid y dispersaos",
-    "group":          "👥 Protocolo AGRUPACIÓN — juntaos, la fuerza está en el grupo",
-    "military_first": "🎖 Protocolo OFENSIVA MILITAR — militares al frente, civiles a los refugios",
-    "random":         "❓ Protocolo... ninguno. El gobierno no se ha puesto de acuerdo",
+    "flee":           "🏃 EVACUATION Protocol — run and scatter",
+    "group":          "👥 GROUPING Protocol — stick together, strength in numbers",
+    "military_first": "🎖 MILITARY OFFENSIVE Protocol — soldiers to the front, civilians to shelters",
+    "random":         "❓ Protocol... none. The government couldn't agree on anything",
 }

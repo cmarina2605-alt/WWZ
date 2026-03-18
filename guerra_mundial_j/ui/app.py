@@ -70,7 +70,9 @@ class App(tk.Tk):
         self.title("⚠️  Guerra Mundial J — Humans vs Zombies Simulation")
         self.geometry(f"{config.WINDOW_WIDTH}x{config.WINDOW_HEIGHT}")
         self.resizable(False, False)
-        self.configure(bg="#1a1a2e")
+        self.configure(bg="#0d0d1a")
+
+        self._last_result: Optional[str] = None
 
         self._build_layout()
         self._start_ui_loop()
@@ -85,30 +87,43 @@ class App(tk.Tk):
         from ui.control_panel import ControlPanel
         from ui.event_log import EventLog
         from ui.stats_panel import StatsPanel
+        from ui.chart import PopulationChart
 
-        # Left frame: grid
-        left_frame = tk.Frame(self, bg="#1a1a2e", padx=5, pady=5)
+        # ── Left column: canvas ──────────────────────────────────────
+        left_frame = tk.Frame(self, bg="#0d0d1a", padx=6, pady=6)
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH)
 
         self.grid_canvas = GridCanvas(left_frame, size=config.CANVAS_SIZE)
         self.grid_canvas.pack()
 
-        # Right frame: controls + log + stats
+        # Thin separator
+        tk.Frame(self, bg="#1e2a4a", width=2).pack(side=tk.LEFT, fill=tk.Y)
+
+        # ── Right column ─────────────────────────────────────────────
         right_frame = tk.Frame(
             self,
-            bg="#16213e",
+            bg="#0d1117",
             padx=8,
-            pady=8,
-            width=config.WINDOW_WIDTH - config.CANVAS_SIZE - 20,
+            pady=6,
+            width=config.WINDOW_WIDTH - config.CANVAS_SIZE - 22,
         )
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         right_frame.pack_propagate(False)
 
         self.control_panel = ControlPanel(right_frame, app=self)
-        self.control_panel.pack(fill=tk.X, pady=(0, 5))
+        self.control_panel.pack(fill=tk.X, pady=(0, 4))
+
+        tk.Frame(right_frame, bg="#1e2a4a", height=1).pack(fill=tk.X, pady=2)
 
         self.stats_panel = StatsPanel(right_frame)
-        self.stats_panel.pack(fill=tk.X, pady=(0, 5))
+        self.stats_panel.pack(fill=tk.X, pady=(0, 4))
+
+        tk.Frame(right_frame, bg="#1e2a4a", height=1).pack(fill=tk.X, pady=2)
+
+        self.chart = PopulationChart(right_frame, chart_height=90)
+        self.chart.pack(fill=tk.X, pady=(0, 4))
+
+        tk.Frame(right_frame, bg="#1e2a4a", height=1).pack(fill=tk.X, pady=2)
 
         self.event_log = EventLog(right_frame)
         self.event_log.pack(fill=tk.BOTH, expand=True)
@@ -142,7 +157,9 @@ class App(tk.Tk):
 
         - Renders the grid with the engine snapshot.
         - Updates the statistics panel.
+        - Feeds new data points to the population chart.
         - Displays new events in the log.
+        - Shows the game-over overlay when the simulation ends.
         """
         snapshot = self.engine.get_snapshot()
 
@@ -164,15 +181,29 @@ class App(tk.Tk):
             "random":         "NO PROTOCOL",
         }
         self.stats_panel.update({
-            "n_humans": snapshot["n_humans"],
+            "n_humans":  snapshot["n_humans"],
             "n_zombies": snapshot["n_zombies"],
-            "infected": snapshot.get("infected", 0),
-            "tick": snapshot["tick"],
-            "phase": snapshot.get("phase", "🧟 Outbreak"),
-            "strategy": strategy_labels.get(strategy, strategy),
-            "antidote": antidote_str,
-            "result": snapshot["result"] or "In progress",
+            "infected":  snapshot.get("infected", 0),
+            "tick":      snapshot["tick"],
+            "phase":     snapshot.get("phase", "🧟 Outbreak"),
+            "strategy":  strategy_labels.get(strategy, strategy),
+            "antidote":  antidote_str,
+            "result":    snapshot["result"] or "In progress",
         })
+
+        # Feed population chart (every tick when running)
+        if snapshot.get("running") or snapshot["tick"] > 0:
+            self.chart.add_point(
+                snapshot["n_humans"],
+                snapshot["n_zombies"],
+                snapshot.get("infected", 0),
+            )
+
+        # Game-over overlay
+        result = snapshot.get("result")
+        if result and result != self._last_result:
+            self._last_result = result
+            self.grid_canvas.show_game_over(result)
 
         # Display new events
         events = self.engine.world.pop_events()
@@ -199,6 +230,10 @@ class App(tk.Tk):
         """Resets the simulation."""
         self.engine.reset()
         self.grid_canvas.clear()
+        self.grid_canvas.clear_overlay()
+        self.chart.reset()
+        self.stats_panel.reset()
+        self._last_result = None
         self.event_log.add_event("🔄 Simulation reset")
 
     def action_run_batch(self, n: int = 100) -> None:
