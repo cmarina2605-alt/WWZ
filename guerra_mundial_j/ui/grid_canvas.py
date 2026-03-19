@@ -56,15 +56,15 @@ class GridCanvas(tk.Canvas):
     LAKE_COLOR       = "#1a4a6b"
 
     # ------------------------------------------------------------------
-    # Agent legend
+    # Agent legend  (label, color, shape)
     # ------------------------------------------------------------------
     LEGEND = [
-        ("Normal",    config.COLOR_NORMAL),
-        ("Military",  config.COLOR_MILITARY),
-        ("Scientist", config.COLOR_SCIENTIST),
-        ("Politician",config.COLOR_POLITICIAN),
-        ("Zombie",    config.COLOR_ZOMBIE),
-        ("Infected",  config.COLOR_INFECTED),
+        ("Normal",     config.COLOR_NORMAL,     "circle"),
+        ("Military",   config.COLOR_MILITARY,   "square"),
+        ("Scientist",  config.COLOR_SCIENTIST,  "circle_outlined"),
+        ("Politician", config.COLOR_POLITICIAN, "diamond"),
+        ("Zombie",     config.COLOR_ZOMBIE,     "blob"),
+        ("Infected",   config.COLOR_INFECTED,   "circle"),
     ]
 
     # ------------------------------------------------------------------
@@ -207,28 +207,44 @@ class GridCanvas(tk.Canvas):
             )
 
     def _draw_legend(self) -> None:
-        """Draws the agent type legend in the bottom-left corner."""
+        """Draws the agent type legend in the bottom-left corner using real shapes."""
         cs = self.cell_size
-        # Anchor at bottom-left corner (within the territory)
         x0 = int(4 * cs)
         y0 = int(84 * cs)
         box = 8
-        row_h = 13
+        row_h = 14
         pad = 4
 
-        # Semi-opaque background (stipple simulates transparency; Tkinter doesn't support alpha in hex)
         total_h = len(self.LEGEND) * row_h + pad * 2
         self.create_rectangle(
             x0 - pad, y0 - pad,
-            x0 + 70, y0 + total_h - pad,
+            x0 + 75, y0 + total_h - pad,
             fill="#000000", outline="", stipple="gray50",
         )
 
         y = y0
-        for label, color in self.LEGEND:
-            self.create_rectangle(x0, y, x0 + box, y + box, fill=color, outline="")
+        for label, color, shape in self.LEGEND:
+            cx = x0 + box // 2
+            cy = y + box // 2
+            x1, y1 = x0, y
+            x2, y2 = x0 + box, y + box
+
+            if shape == "blob":
+                self.create_oval(x1 - 1, y1 - 1, x2 + 1, y2 + 1,
+                                 fill=color, outline="#5a4a00", width=1)
+            elif shape == "square":
+                self.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
+            elif shape == "diamond":
+                self.create_polygon(cx, y1, x2, cy, cx, y2, x1, cy,
+                                    fill=color, outline="")
+            elif shape == "circle_outlined":
+                self.create_oval(x1, y1, x2, y2,
+                                 fill=color, outline="#ffffff", width=1)
+            else:
+                self.create_oval(x1, y1, x2, y2, fill=color, outline="")
+
             self.create_text(
-                x0 + box + 3, y + box // 2,
+                x0 + box + 4, cy,
                 text=label, anchor="w",
                 fill="#dddddd", font=("Consolas", 7),
             )
@@ -257,24 +273,61 @@ class GridCanvas(tk.Canvas):
             self._clear_cell(pos)
 
         for pos, agent_data in snapshot.items():
-            color = agent_data.get("color", config.COLOR_NORMAL)
+            color     = agent_data.get("color", config.COLOR_NORMAL)
             agent_type = agent_data.get("type", "")
-            self._draw_cell(pos, color, agent_type)
+            role      = agent_data.get("role", "")
+            state     = agent_data.get("state", "")
+            self._draw_cell(pos, color, agent_type, role, state)
 
-    def _draw_cell(self, pos: Tuple[int, int], color: str, agent_type: str = "") -> None:
-        """Draws or updates an agent's shape (oval for zombies, rect for humans)."""
-        cs = self.cell_size
-        pad = max(0.5, cs * 0.08)
-        x1 = pos[0] * cs + pad
-        y1 = pos[1] * cs + pad
-        x2 = pos[0] * cs + cs - pad
-        y2 = pos[1] * cs + cs - pad
+    # Shape key per role — used to detect when a recreate is needed
+    _ROLE_SHAPE: Dict[str, str] = {
+        "normal":    "circle",
+        "scientist": "circle_outlined",
+        "military":  "square",
+        "politician":"diamond",
+        "zombie":    "blob",
+    }
 
-        shape = "oval" if agent_type == "Zombie" else "rect"
+    def _draw_cell(
+        self,
+        pos: Tuple[int, int],
+        color: str,
+        agent_type: str = "",
+        role: str = "",
+        state: str = "",
+    ) -> None:
+        """
+        Draws or updates an agent using a shape that reflects its role:
+          Zombie     → large circle with dark outline (blob)
+          Military   → square  (angular, soldier-like)
+          Politician → diamond (rotated square)
+          Scientist  → circle with white outline
+          Normal/Infected/Dead → plain circle
+        """
+        cs  = self.cell_size
+        pad = max(1.0, cs * 0.1)
+        x1  = pos[0] * cs + pad
+        y1  = pos[1] * cs + pad
+        x2  = pos[0] * cs + cs - pad
+        y2  = pos[1] * cs + cs - pad
+        cx  = (x1 + x2) / 2
+        cy  = (y1 + y2) / 2
 
+        # Determine canonical shape key
+        if agent_type == "Zombie":
+            shape = "blob"
+        elif role == "military":
+            shape = "square"
+        elif role == "politician":
+            shape = "diamond"
+        elif role == "scientist":
+            shape = "circle_outlined"
+        else:
+            shape = "circle"
+
+        # Recreate if shape type changed
         if pos in self._rect_ids:
             if self._cell_shape.get(pos) != shape:
-                # Shape changed — delete old and recreate
                 self.delete(self._rect_ids[pos])
                 del self._rect_ids[pos]
                 del self._cell_shape[pos]
@@ -282,13 +335,41 @@ class GridCanvas(tk.Canvas):
                 self.itemconfig(self._rect_ids[pos], fill=color)
                 return
 
-        # Create new item below any overlay
-        if shape == "oval":
-            item_id = self.create_oval(x1, y1, x2, y2, fill=color, outline="")
+        # ---- Create new canvas item ----
+        if shape == "blob":
+            # Zombie: large circle with menacing outline
+            item_id = self.create_oval(
+                x1 - 1, y1 - 1, x2 + 1, y2 + 1,
+                fill=color, outline="#5a4a00", width=1.5,
+            )
+        elif shape == "square":
+            # Military: sharp square
+            item_id = self.create_rectangle(
+                x1, y1, x2, y2,
+                fill=color, outline="",
+            )
+        elif shape == "diamond":
+            # Politician: rotated square (diamond)
+            item_id = self.create_polygon(
+                cx, y1,   # top
+                x2, cy,   # right
+                cx, y2,   # bottom
+                x1, cy,   # left
+                fill=color, outline="",
+            )
+        elif shape == "circle_outlined":
+            # Scientist: circle with bright outline
+            item_id = self.create_oval(
+                x1, y1, x2, y2,
+                fill=color, outline="#ffffff", width=1.2,
+            )
         else:
-            item_id = self.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
+            # Normal / infected / dead: plain circle
+            item_id = self.create_oval(
+                x1, y1, x2, y2,
+                fill=color, outline="",
+            )
 
-        # Keep agents below the overlay layer (only if overlay exists)
         try:
             self.tag_lower(item_id, "overlay")
         except Exception:
