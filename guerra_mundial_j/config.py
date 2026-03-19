@@ -72,10 +72,11 @@ USA_POLYGON: list = [
 # ---------------------------------------------------------------------------
 # Geographic map colors (UI)
 # ---------------------------------------------------------------------------
-OCEAN_COLOR: str = "#0a2040"        # Ocean background
-LAND_COLOR: str = "#2d5a27"         # Continental territory
-LAND_BORDER_COLOR: str = "#4a8a42"  # Outline and state borders
-LAKE_COLOR: str = "#1a4a6b"         # Great Lakes
+OCEAN_COLOR: str = "#061828"        # Deep ocean background
+LAND_COLOR: str = "#1c3318"         # Dark terrain green
+LAND_BORDER_COLOR: str = "#2e5a28"  # Slightly lighter border
+STATE_LINE_COLOR: str = "#2a4e24"   # Subtle state divisions
+LAKE_COLOR: str = "#0c2e48"         # Deep lake blue
 
 # ---------------------------------------------------------------------------
 # Probability parameters
@@ -101,14 +102,14 @@ INFECTION_DELAY_TICKS: int = 25   # Incubation ticks before an infected agent tu
 # ---------------------------------------------------------------------------
 # UI colors (hex)
 # ---------------------------------------------------------------------------
-COLOR_ZOMBIE: str = "#f5e150"      # Canary yellow
-COLOR_NORMAL: str = "#e05252"      # Warm red
-COLOR_MILITARY: str = "#40c870"    # Vibrant green
-COLOR_SCIENTIST: str = "#c084fc"   # Soft purple
-COLOR_POLITICIAN: str = "#4e9eff"  # Sky blue
-COLOR_INFECTED: str = "#ff9020"    # Amber orange
-COLOR_DEAD: str = "#4a4a4a"        # Dark gray
-COLOR_EMPTY: str = "#1a1a2e"       # Dark background
+COLOR_ZOMBIE: str = "#00ff41"      # Neon matrix green — stands out hard
+COLOR_NORMAL: str = "#7a9ab0"      # Muted steel blue-gray
+COLOR_MILITARY: str = "#c8a840"    # Army gold/khaki
+COLOR_SCIENTIST: str = "#55c8ff"   # Bright cyan
+COLOR_POLITICIAN: str = "#c070e0"  # Soft violet
+COLOR_INFECTED: str = "#ff6600"    # Vivid orange
+COLOR_DEAD: str = "#303030"        # Near black
+COLOR_EMPTY: str = "#061828"       # Deep ocean background
 
 # ---------------------------------------------------------------------------
 # Combat parameters

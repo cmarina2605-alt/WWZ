@@ -49,11 +49,11 @@ class GridCanvas(tk.Canvas):
     # ------------------------------------------------------------------
     # Constantes de colores del mapa
     # ------------------------------------------------------------------
-    OCEAN_COLOR      = "#0a2040"
-    LAND_COLOR       = "#2d5a27"
-    LAND_BORDER_COLOR = "#4a8a42"
-    STATE_LINE_COLOR = "#3a7a35"
-    LAKE_COLOR       = "#1a4a6b"
+    OCEAN_COLOR       = config.OCEAN_COLOR
+    LAND_COLOR        = config.LAND_COLOR
+    LAND_BORDER_COLOR = config.LAND_BORDER_COLOR
+    STATE_LINE_COLOR  = config.STATE_LINE_COLOR
+    LAKE_COLOR        = config.LAKE_COLOR
 
     # ------------------------------------------------------------------
     # Agent legend  (label, color, shape)
@@ -151,16 +151,16 @@ class GridCanvas(tk.Canvas):
             width=1.5,
         )
 
-        # State division lines (dashed)
+        # State division lines (dashed, slightly brighter for readability)
         for line in self.STATE_REGION_LINES:
             pts = []
             for gx, gy in line:
                 pts.extend([gx * cs, gy * cs])
             self.create_line(
                 pts,
-                fill=self.STATE_LINE_COLOR,
-                width=0.8,
-                dash=(4, 3),
+                fill="#3a6030",
+                width=1,
+                dash=(5, 4),
             )
 
     def _draw_great_lakes(self) -> None:
@@ -178,30 +178,36 @@ class GridCanvas(tk.Canvas):
     def _draw_zones(self) -> None:
         """Draws key city markers with name and emoji."""
         cs = self.cell_size
-        r = config.LAB_RADIUS * cs
+        r = max(8, config.LAB_RADIUS * cs)
 
         for attr, line1, line2, color in self.CITY_MARKERS:
             gx, gy = getattr(config, attr)
             px, py = gx * cs, gy * cs
 
+            # Outer glow ring
+            self.create_oval(
+                px - r - 3, py - r - 3, px + r + 3, py + r + 3,
+                outline=color, fill="", width=0.5, dash=(2, 4),
+            )
             # Dashed circle
             self.create_oval(
                 px - r, py - r, px + r, py + r,
                 outline=color, fill="", width=1.5, dash=(3, 3),
             )
-            # Center dot
+            # Center crosshair dot
             self.create_oval(
-                px - 2, py - 2, px + 2, py + 2,
-                fill=color, outline="",
+                px - 3, py - 3, px + 3, py + 3,
+                fill=color, outline="#000000", width=1,
             )
-            # Label: city above, emoji/role below
+            # City name
             self.create_text(
-                px, py - r - 10,
+                px, py - r - 12,
                 text=line1, fill=color,
-                font=("Consolas", 7, "bold"),
+                font=("Consolas", 8, "bold"),
             )
+            # Role label
             self.create_text(
-                px, py - r - 1,
+                px, py - r - 2,
                 text=line2, fill=color,
                 font=("Consolas", 7),
             )
@@ -231,7 +237,7 @@ class GridCanvas(tk.Canvas):
 
             if shape == "blob":
                 self.create_oval(x1 - 1, y1 - 1, x2 + 1, y2 + 1,
-                                 fill=color, outline="#5a4a00", width=1)
+                                 fill=color, outline="#001a00", width=1.5)
             elif shape == "square":
                 self.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
             elif shape == "diamond":
@@ -337,10 +343,10 @@ class GridCanvas(tk.Canvas):
 
         # ---- Create new canvas item ----
         if shape == "blob":
-            # Zombie: large circle with menacing outline
+            # Zombie: full-cell neon circle with thick dark outline (no extra items)
             item_id = self.create_oval(
                 x1 - 1, y1 - 1, x2 + 1, y2 + 1,
-                fill=color, outline="#5a4a00", width=1.5,
+                fill=color, outline="#001a00", width=2,
             )
         elif shape == "square":
             # Military: sharp square
