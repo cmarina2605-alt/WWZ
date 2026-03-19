@@ -29,9 +29,9 @@ GRID_SIZE: int = 100          # Side of the square grid (cells)
 # Initial population
 # ---------------------------------------------------------------------------
 NUM_HUMANS: int = 100         # Number of humans at the start
-NUM_ZOMBIES: int = 1          # Number of zombies at the start
+NUM_ZOMBIES: int = 3          # Number of zombies at the start
 NUM_SCIENTISTS: int = 5       # Subset of humans of type Scientist
-NUM_MILITARY: int = 10        # Subset of humans of type Military
+NUM_MILITARY: int = 6         # Subset of humans of type Military
 NUM_POLITICIANS: int = 2      # Subset of humans of type Politician
 
 # ---------------------------------------------------------------------------
@@ -44,6 +44,32 @@ WHITEHOUSE_POS: tuple = (80, 40)    # Washington D.C. — White House
 MILITARY_BASE_POS: tuple = (76, 55) # Fort Bragg, NC — military base
 
 # ---------------------------------------------------------------------------
+# Continental U.S. polygon for the land mask (grid coords 0-99)
+# Used by World to block movement through ocean cells.
+# ---------------------------------------------------------------------------
+USA_POLYGON: list = [
+    # Northwest coast (Washington) → northern border
+    (3, 8), (8, 5), (15, 3), (25, 2), (38, 2), (50, 2), (62, 2),
+    # Northern border → northeast (Maine)
+    (72, 2), (82, 3), (88, 5), (92, 8), (93, 11), (93, 16), (92, 20),
+    # East coast going south
+    (91, 24), (92, 28), (91, 32), (90, 36), (89, 40), (90, 44),
+    (88, 48), (86, 52), (84, 56), (82, 60), (81, 63),
+    # Florida Peninsula
+    (80, 67), (78, 72), (76, 78), (74, 84), (72, 90), (70, 95),
+    (71, 97), (73, 96), (75, 92), (75, 87), (76, 83),
+    # Gulf of Mexico coast (FL → TX)
+    (75, 80), (73, 82), (70, 83), (66, 83), (62, 84),
+    (58, 84), (54, 85), (50, 86), (46, 87), (42, 90),
+    # Texas / Mexico border
+    (40, 90), (38, 88), (35, 83), (32, 78), (28, 73), (24, 71),
+    # Southwest border (US–Mexico)
+    (20, 74), (16, 77), (12, 78), (8, 78), (5, 78), (3, 78),
+    # Pacific coast going north
+    (2, 72), (2, 62), (2, 52), (2, 42), (2, 32), (2, 22), (2, 15), (3, 8),
+]
+
+# ---------------------------------------------------------------------------
 # Geographic map colors (UI)
 # ---------------------------------------------------------------------------
 OCEAN_COLOR: str = "#0a2040"        # Ocean background
@@ -54,9 +80,9 @@ LAKE_COLOR: str = "#1a4a6b"         # Great Lakes
 # ---------------------------------------------------------------------------
 # Probability parameters
 # ---------------------------------------------------------------------------
-P_INFECT: float = 0.15        # Infection probability in an encounter
-P_KILL_ZOMBIE: float = 0.2    # Probability that a human kills the zombie
-P_ESCAPE: float = 0.3         # Base escape probability
+P_INFECT: float = 0.40        # Infection probability in an encounter
+P_KILL_ZOMBIE: float = 0.05   # Probability that a human kills the zombie
+P_ESCAPE: float = 0.20        # Base escape probability
 
 # ---------------------------------------------------------------------------
 # Vision / detection range (in cells)
@@ -69,8 +95,8 @@ VISION_ZOMBIE: int = 15       # Zombie vision radius
 # ---------------------------------------------------------------------------
 TICK_SPEED: float = 0.1       # Seconds between ticks per agent (base)
 WIN_CHECK_INTERVAL: float = 1.0   # Seconds between victory condition checks
-ANTIDOTE_TICKS: int = 500     # Ticks needed for a Scientist to complete the antidote
-INFECTION_DELAY_TICKS: int = 50   # Incubation ticks before an infected agent turns
+ANTIDOTE_TICKS: int = 3000    # Ticks needed for a Scientist to complete the antidote
+INFECTION_DELAY_TICKS: int = 25   # Incubation ticks before an infected agent turns
 
 # ---------------------------------------------------------------------------
 # UI colors (hex)
@@ -87,7 +113,7 @@ COLOR_EMPTY: str = "#1a1a2e"       # Dark background
 # ---------------------------------------------------------------------------
 # Combat parameters
 # ---------------------------------------------------------------------------
-FORCE_MILITARY_BONUS: int = 20
+FORCE_MILITARY_BONUS: int = 15
 FORCE_FLEE_THRESHOLD: int = 60  # Above this value Military does not flee
 AGE_PENALTY_THRESHOLD: int = 60 # From this age onward force decays
 

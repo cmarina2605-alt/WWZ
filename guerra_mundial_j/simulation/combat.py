@@ -127,10 +127,10 @@ def _calculate_probabilities(
     # Probability that the zombie dies (Military with ammo only)
     p_zombie_dies = config.P_KILL_ZOMBIE
     if isinstance(human, Military) and human.ammo > 0:
-        p_zombie_dies += 0.3
+        p_zombie_dies += 0.15   # Guns help but zombies are hard to kill
         human.use_ammo()
     elif not isinstance(human, Military):
-        p_zombie_dies = max(0.01, p_zombie_dies - 0.1)
+        p_zombie_dies = max(0.01, p_zombie_dies - 0.03)
 
     return p_escape, p_infect, p_human_dies, p_zombie_dies
 

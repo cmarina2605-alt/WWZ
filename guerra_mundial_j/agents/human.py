@@ -247,14 +247,14 @@ class Scientist(Human):
         """
         Advances antidote research.
 
-        Progress increases based on the scientist's intelligence.
+        Progress increases based on the scientist's intelligence (1–4 per tick).
+        Intelligence no longer reduces the total ticks needed — only the rate.
         When complete, activates the global antidote_ready event.
         """
-        progress_rate = 1 + int(self.intelligence / 20)
+        progress_rate = 1 + int(self.intelligence / 33)   # 1–4 per tick
         self.antidote_progress += progress_rate
 
-        ticks_needed = config.ANTIDOTE_TICKS - int(self.intelligence * 2)
-        if self.antidote_progress >= ticks_needed:
+        if self.antidote_progress >= config.ANTIDOTE_TICKS:
             antidote_ready.set()
             national_alert.set()
             self.world.push_event(

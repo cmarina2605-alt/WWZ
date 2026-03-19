@@ -71,29 +71,8 @@ class GridCanvas(tk.Canvas):
     # Map geometry
     # ------------------------------------------------------------------
 
-    # Approximate contour of the continental U.S.
-    # (grid coords 0-99; x=west→east, y=north→south)
-    USA_POLYGON = [
-        # Northwest coast (Washington) → northern border
-        (3, 8), (8, 5), (15, 3), (25, 2), (38, 2), (50, 2), (62, 2),
-        # Northern border → northeast (Maine)
-        (72, 2), (82, 3), (88, 5), (92, 8), (93, 11), (93, 16), (92, 20),
-        # East coast going south
-        (91, 24), (92, 28), (91, 32), (90, 36), (89, 40), (90, 44),
-        (88, 48), (86, 52), (84, 56), (82, 60), (81, 63),
-        # Florida Peninsula
-        (80, 67), (78, 72), (76, 78), (74, 84), (72, 90), (70, 95),
-        (71, 97), (73, 96), (75, 92), (75, 87), (76, 83),
-        # Gulf of Mexico coast (FL → TX)
-        (75, 80), (73, 82), (70, 83), (66, 83), (62, 84),
-        (58, 84), (54, 85), (50, 86), (46, 87), (42, 90),
-        # Texas / Mexico border
-        (40, 90), (38, 88), (35, 83), (32, 78), (28, 73), (24, 71),
-        # Southwest border (US–Mexico)
-        (20, 74), (16, 77), (12, 78), (8, 78), (5, 78), (3, 78),
-        # Pacific coast going north
-        (2, 72), (2, 62), (2, 52), (2, 42), (2, 32), (2, 22), (2, 15), (3, 8),
-    ]
+    # Approximate contour of the continental U.S. (shared with simulation layer)
+    USA_POLYGON = config.USA_POLYGON
 
     # Approximate state division lines (dashed strokes)
     STATE_REGION_LINES = [

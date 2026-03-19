@@ -126,6 +126,8 @@ def _human_next_pos(human: "Agent", world: "World") -> Tuple[int, int]:
     raw_y = human.pos[1] + flee_vec[1] * flee_mult + noise_y
 
     new_pos = _clamp((round(raw_x), round(raw_y)), world.size)
+    if new_pos not in world.land_cells:
+        new_pos = _snap_to_land(new_pos, world)
     return _resolve_collision(new_pos, human, world)
 
 
@@ -251,7 +253,10 @@ def move_towards(
     new_x = src[0] + round(step_x)
     new_y = src[1] + round(step_y)
 
-    return _clamp((new_x, new_y), world.size)
+    new_pos = _clamp((new_x, new_y), world.size)
+    if new_pos not in world.land_cells:
+        new_pos = _snap_to_land(new_pos, world)
+    return new_pos
 
 
 def random_walk(
@@ -260,7 +265,9 @@ def random_walk(
     step: int = 1,
 ) -> Tuple[int, int]:
     """
-    Calculates a random adjacent position.
+    Calculates a random adjacent position, staying on land.
+
+    Tries up to 8 random directions; if all land on water, stays in place.
 
     Args:
         pos: Current position (x, y).
@@ -268,12 +275,15 @@ def random_walk(
         step: Maximum displacement per axis.
 
     Returns:
-        New adjacent position (x, y).
+        New adjacent position (x, y) on land.
     """
-    dx = random.randint(-step, step)
-    dy = random.randint(-step, step)
-    new_pos = _clamp((pos[0] + dx, pos[1] + dy), world.size)
-    return new_pos
+    for _ in range(8):
+        dx = random.randint(-step, step)
+        dy = random.randint(-step, step)
+        new_pos = _clamp((pos[0] + dx, pos[1] + dy), world.size)
+        if new_pos in world.land_cells:
+            return new_pos
+    return pos  # Stay in place if surrounded by water
 
 
 def panic_spread(agent: "Agent", world: "World") -> None:
@@ -305,6 +315,33 @@ def panic_spread(agent: "Agent", world: "World") -> None:
 # ---------------------------------------------------------------------------
 # Internal utilities
 # ---------------------------------------------------------------------------
+
+def _snap_to_land(
+    pos: Tuple[int, int],
+    world: "World",
+) -> Tuple[int, int]:
+    """
+    Finds the nearest land cell to pos by expanding outward in rings.
+
+    Args:
+        pos: Position that may be in water.
+        world: The world with the land_cells set.
+
+    Returns:
+        Nearest land cell, or pos itself if none found within radius 5.
+    """
+    if pos in world.land_cells:
+        return pos
+    for r in range(1, 6):
+        for dx in range(-r, r + 1):
+            for dy in range(-r, r + 1):
+                if abs(dx) != r and abs(dy) != r:
+                    continue
+                candidate = _clamp((pos[0] + dx, pos[1] + dy), world.size)
+                if candidate in world.land_cells:
+                    return candidate
+    return pos
+
 
 def _flee_vector(
     pos: Tuple[int, int],
@@ -358,16 +395,16 @@ def _resolve_collision(
     Returns:
         The nearest free position, or the current position if none is available.
     """
-    if world.is_cell_free(pos):
+    if pos in world.land_cells and world.is_cell_free(pos):
         return pos
 
-    # Try adjacent positions
+    # Try adjacent positions (land only)
     for dx in [-1, 0, 1]:
         for dy in [-1, 0, 1]:
             if dx == 0 and dy == 0:
                 continue
             candidate = _clamp((pos[0] + dx, pos[1] + dy), world.size)
-            if world.is_cell_free(candidate):
+            if candidate in world.land_cells and world.is_cell_free(candidate):
                 return candidate
 
     # If everything is occupied, stay in place

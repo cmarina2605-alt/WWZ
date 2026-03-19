@@ -30,6 +30,23 @@ from typing import Dict, List, Tuple, Optional, Any, TYPE_CHECKING
 
 import config
 
+
+def _point_in_polygon(x: int, y: int, polygon: list) -> bool:
+    """Ray-casting algorithm: returns True if (x, y) is inside the polygon."""
+    n = len(polygon)
+    inside = False
+    px, py = float(x), float(y)
+    j = n - 1
+    for i in range(n):
+        xi, yi = polygon[i]
+        xj, yj = polygon[j]
+        if ((yi > py) != (yj > py)) and (
+            px < (xj - xi) * (py - yi) / (yj - yi) + xi
+        ):
+            inside = not inside
+        j = i
+    return inside
+
 if TYPE_CHECKING:
     from agents.base_agent import Agent
 
@@ -66,6 +83,8 @@ class World:
         # Active strategy: "none" until the White House responds
         # All agents read from here to modulate their behavior
         self.strategy: str = "none"
+        # Precomputed set of land cells — agents cannot enter ocean cells
+        self.land_cells: frozenset = self._build_land_mask()
 
     # ------------------------------------------------------------------
     # Grid operations
@@ -105,6 +124,8 @@ class World:
             bool: True if the move was successful.
         """
         new_pos = self._clamp(new_pos)
+        if new_pos not in self.land_cells:
+            return False  # Cannot move into ocean
         with self.lock:
             # Verify that the destination cell is free
             if new_pos in self.grid and self.grid[new_pos] is not agent:
@@ -181,23 +202,24 @@ class World:
         with self.lock:
             return pos not in self.grid
 
+    def is_land(self, pos: Tuple[int, int]) -> bool:
+        """Returns True if pos is a land cell (not ocean)."""
+        return pos in self.land_cells
+
     def find_free_cell(self) -> Optional[Tuple[int, int]]:
         """
-        Finds a random free cell in the grid.
+        Finds a random free land cell in the grid.
 
         Returns:
-            Tuple (x, y) of a free cell, or None if the grid is full.
+            Tuple (x, y) of a free land cell, or None if all are occupied.
         """
         import random
-        attempts = 0
-        max_attempts = self.size * self.size
+        land = list(self.land_cells)
+        random.shuffle(land)
         with self.lock:
-            while attempts < max_attempts:
-                x = random.randint(0, self.size - 1)
-                y = random.randint(0, self.size - 1)
-                if (x, y) not in self.grid:
-                    return (x, y)
-                attempts += 1
+            for pos in land:
+                if pos not in self.grid:
+                    return pos
         return None
 
     # ------------------------------------------------------------------
@@ -278,6 +300,23 @@ class World:
         x = max(0, min(self.size - 1, pos[0]))
         y = max(0, min(self.size - 1, pos[1]))
         return (x, y)
+
+    def _build_land_mask(self) -> frozenset:
+        """
+        Precomputes which grid cells fall inside the continental U.S. polygon.
+
+        Uses ray-casting on each integer cell center. Called once at init.
+
+        Returns:
+            frozenset of (x, y) tuples that are on land.
+        """
+        land = set()
+        polygon = config.USA_POLYGON
+        for x in range(self.size):
+            for y in range(self.size):
+                if _point_in_polygon(x, y, polygon):
+                    land.add((x, y))
+        return frozenset(land)
 
     def count_agents_by_type(self) -> Dict[str, int]:
         """
