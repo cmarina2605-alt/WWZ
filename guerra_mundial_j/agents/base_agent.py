@@ -36,6 +36,8 @@ if TYPE_CHECKING:
 game_over: threading.Event = threading.Event()
 antidote_ready: threading.Event = threading.Event()
 national_alert: threading.Event = threading.Event()
+pause_event: threading.Event = threading.Event()
+pause_event.set()
 
 # Atomic ID counter
 _id_lock = threading.Lock()
@@ -107,6 +109,7 @@ class Agent(threading.Thread, ABC):
         is set or the agent dies.
         """
         while not game_over.is_set() and self._alive:
+            pause_event.wait()
             if self.state == "dead":
                 break
             try:

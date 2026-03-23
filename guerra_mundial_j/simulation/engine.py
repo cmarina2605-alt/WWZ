@@ -32,7 +32,7 @@ from typing import List, Dict, Optional, Any
 
 import config
 from simulation.world import World
-from agents.base_agent import game_over, antidote_ready, national_alert
+from agents.base_agent import game_over, antidote_ready, national_alert, pause_event
 from agents.human import Normal, Scientist, Military, Politician
 from agents.zombie import Zombie
 
@@ -99,8 +99,8 @@ class Engine:
         self.start_time: Optional[float] = None
         self.end_time: Optional[float] = None
 
-        self._pause_event: threading.Event = threading.Event()
-        self._pause_event.set()  # Not paused initially
+        pause_event: threading.Event = threading.Event()
+        pause_event.set()  # Not paused initially
         self._win_thread: Optional[threading.Thread] = None
         self._tick_thread: Optional[threading.Thread] = None
 
@@ -168,10 +168,10 @@ class Engine:
         in their run() loop to stop.
         """
         if self.paused:
-            self._pause_event.set()
+            pause_event.set()
             self.paused = False
         else:
-            self._pause_event.clear()
+            pause_event.clear()
             self.paused = True
 
     def reset(self) -> None:
@@ -200,10 +200,11 @@ class Engine:
         game_over.clear()
         antidote_ready.clear()
         national_alert.clear()
-        self._pause_event.set()
+        pause_event.set()
 
     def stop(self) -> None:
         """Stops the simulation permanently."""
+        pause_event.set()
         game_over.set()
         self.running = False
         self.end_time = time.time()

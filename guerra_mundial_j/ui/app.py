@@ -229,6 +229,8 @@ class App(tk.Tk):
     def action_reset(self) -> None:
         """Resets the simulation."""
         self.engine.reset()
+        self.engine.n_humans_initial = config.NUM_HUMANS
+        self.engine.n_zombies_initial = config.NUM_ZOMBIES
         self.grid_canvas.clear()
         self.grid_canvas.clear_overlay()
         self.chart.reset()

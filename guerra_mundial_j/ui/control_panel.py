@@ -221,7 +221,7 @@ class ControlPanel(tk.Frame):
         Args:
             value: New slider value as string.
         """
-        config.TICK_SPEED = float(value)
+        config.TICK_SPEED = 0.51 - float(value)
 
     def _on_p_infect_change(self, value: str) -> None:
         """
