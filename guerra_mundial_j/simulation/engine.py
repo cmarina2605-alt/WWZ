@@ -82,7 +82,8 @@ class Engine:
         self.seed: int = seed if seed is not None else random.randint(0, 999999)
         random.seed(self.seed)
 
-        self.strategy: str = strategy
+        self._default_strategy: str = strategy  # fallback used by _choose_strategy
+        self.strategy: str = "none"             # set to "none" until White House responds
         self.phase: str = "🧟 Outbreak"   # Current narrative phase of the simulation
         self.n_humans_initial: int = n_humans
         self.n_zombies_initial: int = n_zombies
@@ -356,7 +357,7 @@ class Engine:
             if isinstance(a, Politician) and a.is_alive()
         ]
         if not politicians:
-            return "flee", None
+            return self._default_strategy, None
 
         winner = max(politicians, key=lambda p: p.influence)
         chosen = winner.IDEOLOGY_STRATEGIES.get(winner.ideology, "flee")
