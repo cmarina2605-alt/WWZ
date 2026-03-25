@@ -100,8 +100,6 @@ class Engine:
         self.start_time: Optional[float] = None
         self.end_time: Optional[float] = None
 
-        pause_event: threading.Event = threading.Event()
-        pause_event.set()  # Not paused initially
         self._win_thread: Optional[threading.Thread] = None
         self._tick_thread: Optional[threading.Thread] = None
 
@@ -280,7 +278,7 @@ class Engine:
     def _tick_loop(self) -> None:
         """Increments the global world tick at regular intervals."""
         while not game_over.is_set():
-            self._pause_event.wait()
+            pause_event.wait()
             time.sleep(config.TICK_SPEED)
             self.tick += 1
             self.world.tick = self.tick
@@ -319,7 +317,7 @@ class Engine:
         start_tick = self.tick
         while self.tick - start_tick < delay_ticks and not game_over.is_set():
             time.sleep(0.2)
-            self._pause_event.wait()
+            pause_event.wait()
 
         if game_over.is_set():
             return
@@ -376,7 +374,7 @@ class Engine:
 
         while not game_over.is_set():
             time.sleep(0.3)
-            self._pause_event.wait()
+            pause_event.wait()
             if game_over.is_set():
                 break
 
@@ -413,7 +411,7 @@ class Engine:
         """
         while not game_over.is_set():
             time.sleep(config.WIN_CHECK_INTERVAL)
-            self._pause_event.wait()
+            pause_event.wait()
             self.check_win_conditions()
 
     def check_win_conditions(self) -> None:
