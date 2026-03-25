@@ -533,9 +533,15 @@ class Engine:
             )
             antidote_pct = min(100, int(best_progress / max(1, config.ANTIDOTE_TICKS) * 100))
 
+        n_humans_live = sum(
+            1 for a in self.agents
+            if a.__class__.__name__ != "Zombie" and a.is_alive()
+            and a.state not in ("infected", "dead")
+        )
+
         return {
             "tick": self.tick,
-            "n_humans": self.n_humans,
+            "n_humans": n_humans_live,
             "n_zombies": self.n_zombies,
             "infected": infected_count,
             "antidote_pct": antidote_pct,
