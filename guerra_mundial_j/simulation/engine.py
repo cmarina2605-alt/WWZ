@@ -219,10 +219,10 @@ class Engine:
         Distributes roles according to the configuration constants.
         """
         n = self.n_humans_initial
-        # Scale roles so they don't exceed the total number of humans
-        n_sci = min(config.NUM_SCIENTISTS, max(0, n // 10))
-        n_mil = min(config.NUM_MILITARY, max(0, n // 5))
-        n_pol = min(config.NUM_POLITICIANS, max(0, n // 20))
+        # Scale roles proportionally to the total number of humans
+        n_sci = max(1, n // 10)   # ~10% scientists
+        n_mil = max(1, n // 5)    # ~20% military
+        n_pol = max(1, n // 20)   # ~5% politicians
         n_normal = max(0, n - n_sci - n_mil - n_pol)
 
         agent_specs = (
