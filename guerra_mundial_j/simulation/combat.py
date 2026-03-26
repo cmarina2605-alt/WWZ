@@ -121,8 +121,8 @@ def _calculate_probabilities(
     if human.age > config.AGE_PENALTY_THRESHOLD:
         p_infect += 0.1  # More vulnerable if elderly
 
-    # Probability that the human dies directly
-    p_human_dies = max(0.05, 0.3 - force_ratio * 0.2)
+    # Probability that the human dies directly (scales down as p_infect increases)
+    p_human_dies = max(0.0, (0.3 - force_ratio * 0.2) * (1 - config.P_INFECT))
 
     # Probability that the zombie dies (Military with ammo only)
     p_zombie_dies = config.P_KILL_ZOMBIE
