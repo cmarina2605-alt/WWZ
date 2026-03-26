@@ -291,7 +291,7 @@ class Engine:
           1. Waits for a Politician to activate national_alert.
           2. Counts how many people are in panic (running) → more panic,
              faster message (the news spreads on its own).
-          3. Waits delay_ticks before the White House 'responds'.
+          3. Waits delay_s real seconds before the White House 'responds'.
           4. Chooses the strategy based on the most influential politician.
           5. Writes world.strategy so all agents can read it.
         """
@@ -301,21 +301,21 @@ class Engine:
 
         # How many people are in panic when the alert arrives
         num_alerted = sum(1 for a in self.agents if getattr(a, "state", "") == "running")
-        delay_ticks = max(
-            config.MIN_ALERT_DELAY,
-            int(config.WHITEHOUSE_DELAY_BASE - config.WHITEHOUSE_DELAY_K * num_alerted),
+        delay_s = max(
+            config.MIN_ALERT_DELAY_S,
+            config.WHITEHOUSE_DELAY_BASE_S - config.WHITEHOUSE_DELAY_K_S * num_alerted,
         )
 
         self.phase = "📨 Alert sent"
         self.world.push_event(
             "alert",
             f"📨 Message on its way to the White House "
-            f"({num_alerted} in panic) — arriving in ~{delay_ticks} ticks",
+            f"({num_alerted} in panic) — arriving in ~{int(delay_s)}s",
         )
 
-        # Wait for the delay ticks
-        start_tick = self.tick
-        while self.tick - start_tick < delay_ticks and not game_over.is_set():
+        # Wait for the delay in real seconds (independent of simulation speed)
+        deadline = time.time() + delay_s
+        while time.time() < deadline and not game_over.is_set():
             time.sleep(0.2)
             pause_event.wait()
 

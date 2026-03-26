@@ -134,12 +134,13 @@ UI_REFRESH_MS: int = 80       # Milliseconds between UI refreshes
 # ---------------------------------------------------------------------------
 # National alert / White House mechanic
 # ---------------------------------------------------------------------------
-# Formula: delay = max(MIN_ALERT_DELAY, BASE - K * num_panicking)
+# Delays are in real-world SECONDS (independent of simulation speed).
+# Formula: delay = max(MIN_ALERT_DELAY_S, BASE - K * num_panicking)
 # The more people in panic when the politician sends the alert,
 # the faster the message reaches the White House.
-WHITEHOUSE_DELAY_BASE: int = 60    # Base ticks until the message arrives
-WHITEHOUSE_DELAY_K: float = 0.5    # Tick reduction per panicking person
-MIN_ALERT_DELAY: int = 10          # Minimum wait ticks (bureaucracy is always there)
+WHITEHOUSE_DELAY_BASE_S: float = 20.0  # Base seconds until the message arrives
+WHITEHOUSE_DELAY_K_S: float = 0.15     # Second reduction per panicking person
+MIN_ALERT_DELAY_S: float = 6.0         # Minimum wait seconds (bureaucracy is always there)
 
 # ---------------------------------------------------------------------------
 # Available strategies
