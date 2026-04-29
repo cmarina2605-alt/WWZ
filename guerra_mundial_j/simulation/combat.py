@@ -24,9 +24,16 @@ the agents, and a descriptive event is pushed to the world's EventLog.
 """
 
 import random
-from typing import Literal, TYPE_CHECKING
+from typing import Literal, Optional, TYPE_CHECKING
 
 import config
+from commands import (
+    EscapeCommand,
+    InfectCommand,
+    KillHumanCommand,
+    KillZombieCommand,
+    CommandHistory,
+)
 
 if TYPE_CHECKING:
     from agents.human import Human
@@ -113,24 +120,32 @@ def _calculate_probabilities(
     force_ratio = human.force / max(1, zombie.force)
 
     # Base escape probability (more force → easier to escape)
-    p_escape = config.P_ESCAPE * force_ratio
-    p_escape = min(0.7, max(0.05, p_escape))
+    # Stronger humans escape much more easily; capped at 0.75
+    p_escape = config.P_ESCAPE * (0.5 + force_ratio * 0.8)
+    p_escape = min(0.75, max(0.08, p_escape))
 
     # Infection probability
     p_infect = config.P_INFECT
     if human.age > config.AGE_PENALTY_THRESHOLD:
-        p_infect += 0.1  # More vulnerable if elderly
+        p_infect += 0.08  # More vulnerable if elderly (was 0.10)
+    # Slightly reduce infection chance for strong humans
+    p_infect *= max(0.6, 1.0 - force_ratio * 0.2)
 
-    # Probability that the human dies directly (scales down as p_infect increases)
-    p_human_dies = max(0.0, (0.3 - force_ratio * 0.2) * (1 - config.P_INFECT))
+    # Probability that the human dies directly
+    # Lower base (0.15 instead of 0.3) — infection is the main threat, not instant death
+    p_human_dies = max(0.0, (0.15 - force_ratio * 0.1) * (1 - config.P_INFECT))
 
-    # Probability that the zombie dies (Military with ammo only)
+    # Probability that the zombie dies
+    # Note: ammo is consumed in _apply_outcome, not here — this is a pure calculation
     p_zombie_dies = config.P_KILL_ZOMBIE
     if isinstance(human, Military) and human.ammo > 0:
-        p_zombie_dies += 0.15   # Guns help but zombies are hard to kill
-        human.use_ammo()
-    elif not isinstance(human, Military):
-        p_zombie_dies = max(0.01, p_zombie_dies - 0.03)
+        p_zombie_dies += 0.25   # Military with ammo is a real threat
+    elif isinstance(human, Military):
+        # Military without ammo still fights better than civilians
+        p_zombie_dies += 0.05
+    else:
+        # Civilians can barely kill zombies
+        p_zombie_dies = max(0.02, p_zombie_dies - 0.02)
 
     return p_escape, p_infect, p_human_dies, p_zombie_dies
 
@@ -142,54 +157,44 @@ def _apply_outcome(
     world: "World",
 ) -> None:
     """
-    Applies the effects of a combat outcome to the agents.
+    Applies the effects of a combat outcome using the Command pattern.
+
+    Design Pattern: COMMAND
+        Each outcome is encapsulated as a Command object. The command is
+        executed through the world's CommandHistory (if available), which
+        logs it for replay and post-game analytics. If no history exists
+        the command is executed directly.
 
     Args:
         outcome: Result of the encounter.
         human: Human agent.
         zombie: Zombie agent.
         world: The shared world.
+
+    References:
+        https://refactoring.guru/design-patterns/command
     """
-    from simulation.engine import Engine  # Deferred import to avoid circular dependency
+    tick = getattr(world, "tick", 0)
 
-    if outcome == "escape":
-        human.set_state("running")
-        world.push_event("escape", f"🏃 Human {human.agent_id} escaped from Zombie {zombie.agent_id}")
-
-    elif outcome == "human_infected":
-        human.infect()
-        world.push_event(
-            "infection",
-            f"🧟 Human {human.agent_id} infected by Zombie {zombie.agent_id}",
-        )
-        # The actual conversion is managed by Engine when it detects the "infected" state
-        # to avoid concurrency issues when creating new threads
-
-    elif outcome == "human_dies":
-        human.die()
-        world.push_event("death", f"💀 Human {human.agent_id} died at the hands of Zombie {zombie.agent_id}")
-
-    elif outcome == "zombie_dies":
-        zombie.die()
-        world.push_event("zombie_death", f"🔫 Zombie {zombie.agent_id} eliminated by Human {human.agent_id}")
-
-
-def combat_summary(outcome: Outcome, human_id: int, zombie_id: int) -> str:
-    """
-    Generates a human-readable description of the combat outcome.
-
-    Args:
-        outcome: Result of the encounter.
-        human_id: Human ID.
-        zombie_id: Zombie ID.
-
-    Returns:
-        Descriptive string of the event.
-    """
-    messages = {
-        "escape": f"Human #{human_id} escaped from Zombie #{zombie_id}",
-        "human_infected": f"Human #{human_id} was infected by Zombie #{zombie_id}",
-        "human_dies": f"Human #{human_id} died facing Zombie #{zombie_id}",
-        "zombie_dies": f"Zombie #{zombie_id} was eliminated by Human #{human_id}",
+    # Build the appropriate command object
+    command_map = {
+        "escape":         EscapeCommand,
+        "human_infected": InfectCommand,
+        "human_dies":     KillHumanCommand,
+        "zombie_dies":    KillZombieCommand,
     }
-    return messages.get(outcome, f"Unknown encounter between #{human_id} and #{zombie_id}")
+
+    cmd_class = command_map.get(outcome)
+    if cmd_class is None:
+        return
+
+    command = cmd_class(human=human, zombie=zombie, world=world, tick=tick)
+
+    # Execute through CommandHistory if the engine attached one
+    history: Optional[CommandHistory] = getattr(world, "command_history", None)
+    if history is not None:
+        history.execute(command)
+    else:
+        command.execute()
+
+

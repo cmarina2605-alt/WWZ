@@ -23,50 +23,105 @@ Sections:
 # ---------------------------------------------------------------------------
 # World dimensions
 # ---------------------------------------------------------------------------
-GRID_SIZE: int = 100          # Side of the square grid (cells)
+GRID_SIZE: int = 250          # Side of the square grid (cells) — was 100
 
 # ---------------------------------------------------------------------------
 # Initial population
 # ---------------------------------------------------------------------------
-NUM_HUMANS: int = 100         # Number of humans at the start
-NUM_ZOMBIES: int = 3          # Number of zombies at the start
-NUM_SCIENTISTS: int = 5       # Subset of humans of type Scientist
-NUM_MILITARY: int = 6         # Subset of humans of type Military
-NUM_POLITICIANS: int = 2      # Subset of humans of type Politician
+NUM_HUMANS: int = 300         # Number of humans at the start (scaled for 250×250)
+NUM_ZOMBIES: int = 5          # Number of zombies at the start
+NUM_SCIENTISTS: int = 15      # DB default (engine calculates ~10% of NUM_HUMANS)
+NUM_MILITARY: int = 20        # DB default (engine calculates ~20% of NUM_HUMANS)
+NUM_POLITICIANS: int = 3      # DB default (engine calculates ~5% of NUM_HUMANS)
 
 # ---------------------------------------------------------------------------
-# Key locations on the US map (x=west-east, y=north-south, grid 0-99)
+# Key locations on the US map (x=west-east, y=north-south, grid 0-249)
 # ---------------------------------------------------------------------------
-OUTBREAK_POS: tuple = (5, 74)       # San Diego, CA — outbreak origin (José)
-LAB_POS: tuple = (68, 62)           # CDC Atlanta, GA — science base
-LAB_RADIUS: int = 3                 # Laboratory detection radius (cells)
-WHITEHOUSE_POS: tuple = (80, 40)    # Washington D.C. — White House
-MILITARY_BASE_POS: tuple = (76, 55) # Fort Bragg, NC — military base
+OUTBREAK_POS: tuple = (12, 185)      # San Diego, CA — outbreak origin (José)
+LAB_POS: tuple = (170, 155)         # CDC Atlanta, GA — science base
+LAB_RADIUS: int = 7                 # Laboratory detection radius (cells)
+WHITEHOUSE_POS: tuple = (200, 100)  # Washington D.C. — White House
+MILITARY_BASE_POS: tuple = (190, 138) # Fort Bragg, NC — military base
+MILITARY_BASE_RADIUS: int = 10      # Radius of the safe zone around the base (cells)
+REFUGE_MAX_TICKS: int = 150          # Max ticks a human can stay sheltered before eviction
+REFUGE_COOLDOWN_TICKS: int = 200     # Ticks before the same human can re-enter the refuge
 
 # ---------------------------------------------------------------------------
-# Continental U.S. polygon for the land mask (grid coords 0-99)
+# Continental U.S. polygon for the land mask (grid coords 0-249)
 # Used by World to block movement through ocean cells.
 # ---------------------------------------------------------------------------
 USA_POLYGON: list = [
-    # Northwest coast (Washington) → northern border
-    (3, 8), (8, 5), (15, 3), (25, 2), (38, 2), (50, 2), (62, 2),
-    # Northern border → northeast (Maine)
-    (72, 2), (82, 3), (88, 5), (92, 8), (93, 11), (93, 16), (92, 20),
-    # East coast going south
-    (91, 24), (92, 28), (91, 32), (90, 36), (89, 40), (90, 44),
-    (88, 48), (86, 52), (84, 56), (82, 60), (81, 63),
-    # Florida Peninsula
-    (80, 67), (78, 72), (76, 78), (74, 84), (72, 90), (70, 95),
-    (71, 97), (73, 96), (75, 92), (75, 87), (76, 83),
-    # Gulf of Mexico coast (FL → TX)
-    (75, 80), (73, 82), (70, 83), (66, 83), (62, 84),
-    (58, 84), (54, 85), (50, 86), (46, 87), (42, 90),
-    # Texas / Mexico border
-    (40, 90), (38, 88), (35, 83), (32, 78), (28, 73), (24, 71),
-    # Southwest border (US–Mexico)
-    (20, 74), (16, 77), (12, 78), (8, 78), (5, 78), (3, 78),
-    # Pacific coast going north
-    (2, 72), (2, 62), (2, 52), (2, 42), (2, 32), (2, 22), (2, 15), (3, 8),
+    # ── Pacific Northwest (Washington State) ──
+    (7, 15), (10, 12), (14, 10), (18, 8), (22, 7),
+    # ── Northern border (Montana, N. Dakota, Minnesota) ──
+    (28, 6), (35, 5), (42, 5), (50, 5), (58, 5), (66, 5),
+    (74, 5), (82, 5), (90, 5), (98, 5), (106, 5),
+    # ── Great Lakes region (Wisconsin, Michigan) ──
+    (114, 5), (122, 5), (130, 6), (138, 7), (144, 10),
+    (148, 14), (150, 18), (148, 22),
+    # ── Upper New England (Vermont, New Hampshire, Maine) ──
+    (152, 16), (156, 14), (160, 12), (166, 10), (172, 8),
+    (178, 6), (185, 5), (192, 6), (198, 8),
+    # ── Maine coast ──
+    (205, 10), (210, 14), (215, 12), (220, 15), (224, 18),
+    (228, 22), (230, 26),
+    # ── Northeast coast (Massachusetts, Connecticut, New York) ──
+    (232, 30), (233, 35), (232, 40), (230, 45),
+    (232, 48), (234, 44), (233, 40),
+    # ── Mid-Atlantic (New Jersey, Delaware, Maryland) ──
+    (230, 52), (228, 56), (230, 60), (228, 64),
+    (226, 68), (224, 72), (222, 76),
+    # ── Virginia, Carolinas coast ──
+    (220, 80), (222, 84), (224, 88), (222, 92),
+    (218, 96), (215, 100), (212, 104),
+    # ── South Carolina, Georgia coast ──
+    (210, 108), (208, 112), (206, 116), (204, 120),
+    (202, 124), (200, 130), (198, 136),
+    # ── Florida Peninsula (east coast) ──
+    (196, 142), (194, 148), (192, 154), (190, 160),
+    (188, 166), (185, 172), (182, 180), (178, 188),
+    (175, 195), (172, 202), (170, 210),
+    # ── Florida tip and Keys ──
+    (168, 218), (170, 224), (172, 230), (175, 236),
+    (178, 238), (182, 236), (185, 230),
+    # ── Florida Peninsula (west coast going north) ──
+    (188, 222), (190, 214), (190, 206), (188, 198),
+    (186, 192), (184, 186),
+    # ── Gulf coast (Florida panhandle) ──
+    (180, 182), (176, 186), (172, 188), (168, 190),
+    (164, 192), (160, 194), (156, 196),
+    # ── Gulf coast (Alabama, Mississippi, Louisiana) ──
+    (152, 198), (148, 200), (144, 202), (140, 204),
+    (136, 206), (132, 208), (128, 210),
+    # ── Louisiana delta ──
+    (124, 212), (120, 214), (116, 216), (112, 214),
+    (108, 212), (104, 210),
+    # ── Texas Gulf coast ──
+    (100, 212), (96, 214), (92, 216), (88, 218),
+    (84, 220), (80, 222), (76, 224),
+    # ── South Texas / Mexico border ──
+    (72, 222), (68, 218), (64, 212), (60, 206),
+    (56, 200), (52, 195), (48, 190),
+    # ── Texas–Mexico border (Rio Grande) ──
+    (44, 186), (40, 182), (36, 178), (32, 174),
+    (28, 172), (24, 175), (20, 178),
+    # ── New Mexico / Arizona border ──
+    (16, 182), (12, 186), (8, 190), (6, 194),
+    (5, 196), (7, 195),
+    # ── Southwest corner (California border) ──
+    (8, 192), (6, 188), (5, 184), (5, 180),
+    # ── California coast going north ──
+    (4, 176), (4, 170), (5, 164), (5, 158),
+    (4, 152), (4, 146), (5, 140), (5, 134),
+    (4, 128), (5, 122), (5, 116), (5, 110),
+    # ── Northern California ──
+    (5, 104), (5, 98), (5, 92), (5, 86),
+    (5, 80), (5, 74), (5, 68),
+    # ── Oregon coast ──
+    (5, 62), (5, 56), (5, 50), (5, 44),
+    (5, 38), (5, 32),
+    # ── Washington coast back to start ──
+    (5, 26), (5, 22), (6, 18), (7, 15),
 ]
 
 # ---------------------------------------------------------------------------
@@ -76,20 +131,19 @@ OCEAN_COLOR: str = "#061828"        # Deep ocean background
 LAND_COLOR: str = "#1c3318"         # Dark terrain green
 LAND_BORDER_COLOR: str = "#2e5a28"  # Slightly lighter border
 STATE_LINE_COLOR: str = "#2a4e24"   # Subtle state divisions
-LAKE_COLOR: str = "#0c2e48"         # Deep lake blue
 
 # ---------------------------------------------------------------------------
 # Probability parameters
 # ---------------------------------------------------------------------------
-P_INFECT: float = 0.40        # Infection probability in an encounter
-P_KILL_ZOMBIE: float = 0.05   # Probability that a human kills the zombie
-P_ESCAPE: float = 0.20        # Base escape probability
+P_INFECT: float = 0.25        # Infection probability in an encounter (was 0.40)
+P_KILL_ZOMBIE: float = 0.08   # Probability that a human kills the zombie (was 0.05)
+P_ESCAPE: float = 0.35        # Base escape probability (was 0.20)
 
 # ---------------------------------------------------------------------------
 # Vision / detection range (in cells)
 # ---------------------------------------------------------------------------
-VISION_HUMAN: int = 10        # Human vision radius
-VISION_ZOMBIE: int = 15       # Zombie vision radius
+VISION_HUMAN: int = 25        # Human vision radius (scaled for 250×250)
+VISION_ZOMBIE: int = 38       # Zombie vision radius (scaled for 250×250)
 
 # ---------------------------------------------------------------------------
 # Timing
@@ -107,9 +161,26 @@ COLOR_NORMAL: str = "#7a9ab0"      # Muted steel blue-gray
 COLOR_MILITARY: str = "#c8a840"    # Army gold/khaki
 COLOR_SCIENTIST: str = "#ffffff"   # White
 COLOR_POLITICIAN: str = "#c070e0"  # Soft violet
+COLOR_PRESIDENT: str = "#ffd700"   # Gold — the Commander-in-Chief
 COLOR_INFECTED: str = "#ff6600"    # Vivid orange
 COLOR_DEAD: str = "#303030"        # Near black
 COLOR_EMPTY: str = "#061828"       # Deep ocean background
+
+# ---------------------------------------------------------------------------
+# Survival attributes (food, water)
+# ---------------------------------------------------------------------------
+INITIAL_FOOD: int = 100          # Starting food level (0-100)
+INITIAL_WATER: int = 100         # Starting water level (0-100)
+FOOD_DECAY_PER_TICK: float = 0.15   # Food consumed per tick
+WATER_DECAY_PER_TICK: float = 0.20  # Water consumed per tick (dehydration is faster)
+STARVATION_THRESHOLD: int = 0    # At this level, agent starts losing force
+DEHYDRATION_THRESHOLD: int = 0   # At this level, agent starts losing force
+FORCE_LOSS_NO_FOOD: float = 0.3  # Force lost per tick when starving
+FORCE_LOSS_NO_WATER: float = 0.5 # Force lost per tick when dehydrated
+DEATH_FORCE_THRESHOLD: int = 5   # Below this force from starvation/dehydration → death
+REFUGE_FOOD_REGEN: float = 2.0   # Food recovered per tick while in refuge
+REFUGE_WATER_REGEN: float = 2.0  # Water recovered per tick while in refuge
+MILITARY_AMMO_RESUPPLY: int = 5  # Ammo given to military at the base per visit
 
 # ---------------------------------------------------------------------------
 # Combat parameters
@@ -121,14 +192,15 @@ AGE_PENALTY_THRESHOLD: int = 60 # From this age onward force decays
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
-DB_PATH: str = "simulations.db"
+import os as _os
+DB_PATH: str = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "simulations.db")
 
 # ---------------------------------------------------------------------------
 # UI
 # ---------------------------------------------------------------------------
-WINDOW_WIDTH: int = 1420
-WINDOW_HEIGHT: int = 760
-CANVAS_SIZE: int = 700        # Grid canvas size in pixels
+WINDOW_WIDTH: int = 1520
+WINDOW_HEIGHT: int = 860
+CANVAS_SIZE: int = 800        # Grid canvas size in pixels
 UI_REFRESH_MS: int = 80       # Milliseconds between UI refreshes
 
 # ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@ The conversion of infected humans does NOT happen here; it is managed by the
 Engine's InfectionMonitor to avoid race conditions when creating new threads.
 """
 
+import math
 import random
 from typing import Tuple, Optional, TYPE_CHECKING
 
@@ -111,7 +112,9 @@ class Zombie(Agent):
         nearby = self.world.get_agents_in_radius(self.pos, config.VISION_ZOMBIE)
         humans = [
             a for a in nearby
-            if isinstance(a, Human) and a.is_alive() and a.state != "infected"
+            if isinstance(a, Human) and a.is_alive()
+            and a.state != "infected"
+            and not getattr(a, "in_refuge", False)
         ]
 
         if not humans:
@@ -119,42 +122,79 @@ class Zombie(Agent):
 
         return min(humans, key=lambda h: self.distance_to(h.pos))
 
+    def _is_in_safe_zone(self, pos: tuple) -> bool:
+        """Returns True if the given position is inside the military base safe zone."""
+        dx = pos[0] - config.MILITARY_BASE_POS[0]
+        dy = pos[1] - config.MILITARY_BASE_POS[1]
+        return math.sqrt(dx * dx + dy * dy) <= config.MILITARY_BASE_RADIUS
+
     def _pursue_and_attack(self, target: "Human", combat, movement) -> None:
         """
         Pursues the target and attacks if in contact.
+
+        Zombies cannot enter the military base safe zone.
 
         Args:
             target: Target human.
             combat: Combat module.
             movement: Movement module.
         """
+        # Don't attack humans sheltered in the refuge
+        if getattr(target, "in_refuge", False):
+            self.target_id = None
+            return
+
         dist = self.distance_to(target.pos)
 
         if dist <= 1.5:
             # In contact: resolve encounter
             self.set_state("fighting")
-            combat.resolve_encounter(target, self, self.world)
+            outcome = combat.resolve_encounter(target, self, self.world)
             self.hunger = max(0, self.hunger - 30)
-            self.infection_count += 1
+            if outcome == "human_infected":
+                self.infection_count += 1
         else:
-            # Chase
+            # Chase — but respect the safe zone
             self.set_state("calm")
             next_pos = movement.move_towards(self.pos, target.pos, self.world)
+            if self._is_in_safe_zone(next_pos):
+                # Can't enter safe zone — pace outside instead
+                next_pos = movement.random_walk(self.pos, self.world)
             self.world.move_agent(self, next_pos)
+
+    def clone(self, **overrides) -> "Zombie":
+        """
+        Prototype pattern: creates a copy of this zombie.
+
+        Used during infected→zombie conversion. The clone inherits
+        the position and force of the infected human it replaces.
+
+        Args:
+            **overrides: Attribute overrides (pos, force, etc.).
+
+        Returns:
+            A new Zombie instance (not yet started or placed).
+        """
+        overrides.setdefault("cls", Zombie)
+        new_zombie = super().clone(**overrides)
+        new_zombie.hunger = overrides.get("hunger", 50)
+        new_zombie.infection_count = 0
+        return new_zombie
 
     def _calculate_move_delay(self) -> float:
         """
         Calculates the movement delay.
 
-        Hungrier zombies move slightly faster.
+        Hungrier zombies move faster — hunger drives them to chase prey
+        more aggressively. At max hunger (100), zombies move 30% faster.
 
         Returns:
             float: Wait seconds between ticks.
         """
         base = super()._calculate_move_delay()
-        # Hunger reduces delay (up to 20% faster)
-        hunger_factor = 1.0 - (self.hunger / 500.0)
-        return max(0.05, base * hunger_factor)
+        # Hunger reduces delay: 0 hunger → ×1.0, 100 hunger → ×0.7
+        hunger_factor = 1.0 - (self.hunger / 100.0) * 0.3
+        return max(0.03, base * hunger_factor)
 
     # ------------------------------------------------------------------
     # Visual representation

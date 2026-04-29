@@ -33,7 +33,6 @@ Examples:
 import argparse
 import sys
 import time
-import random
 
 import config
 from simulation.engine import Engine

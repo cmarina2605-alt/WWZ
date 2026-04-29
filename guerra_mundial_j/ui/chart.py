@@ -20,6 +20,7 @@ Usage:
 """
 
 import tkinter as tk
+from collections import deque
 from typing import List
 
 import config
@@ -28,6 +29,9 @@ import config
 class PopulationChart(tk.Frame):
     """
     Scrolling line chart of population over time.
+
+    Uses deque with maxlen for O(1) eviction of old data points
+    instead of list.pop(0) which is O(n).
 
     Attributes:
         MAX_POINTS (int): Maximum history length kept in memory.
@@ -47,9 +51,9 @@ class PopulationChart(tk.Frame):
         """
         super().__init__(parent, bg="#0d1117", padx=3, pady=3)
         self._ch = chart_height
-        self._humans:  List[int] = []
-        self._zombies: List[int] = []
-        self._infected: List[int] = []
+        self._humans:  deque[int] = deque(maxlen=self.MAX_POINTS)
+        self._zombies: deque[int] = deque(maxlen=self.MAX_POINTS)
+        self._infected: deque[int] = deque(maxlen=self.MAX_POINTS)
         self._build()
 
     # ------------------------------------------------------------------
@@ -111,10 +115,6 @@ class PopulationChart(tk.Frame):
         self._humans.append(n_humans)
         self._zombies.append(n_zombies)
         self._infected.append(infected)
-        if len(self._humans) > self.MAX_POINTS:
-            self._humans.pop(0)
-            self._zombies.pop(0)
-            self._infected.pop(0)
         self._redraw()
 
     def reset(self) -> None:

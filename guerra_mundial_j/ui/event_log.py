@@ -41,7 +41,7 @@ class EventLog(tk.Frame):
         max_lines (int): Maximum lines before pruning.
     """
 
-    # Colores para tipos de mensajes especiales
+    # Colors for special message types
     TAG_COLORS = {
         "death": "#ff6b6b",
         "infection": "#ffa500",
@@ -171,7 +171,7 @@ class EventLog(tk.Frame):
             return "death"
         if any(e in msg for e in ("🧟", "infected", "infect")):
             return "infection"
-        if any(e in msg for e in ("🧪", "antidote", "ANTIDOTE")):
+        if any(e in msg for e in ("💉", "🧪", "antidote", "ANTIDOTE")):
             return "antidote"
         if any(e in msg for e in ("📨", "alert", "White House")):
             return "alert"

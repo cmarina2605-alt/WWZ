@@ -17,8 +17,7 @@ Test suites:
     TestStatsQueries            — analyze_strategies() returns win rates by strategy;
                                   sensitivity_analysis('p_infect') returns buckets;
                                   invalid parameters raise ValueError;
-                                  get_best_strategy() returns the winning strategy
-                                  or None if the DB is empty.
+                                  invalid parameters raise ValueError.
 """
 
 import unittest
@@ -29,7 +28,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from db.database import Database
-from db.stats import analyze_strategies, sensitivity_analysis, get_best_strategy
+from db.stats import analyze_strategies, sensitivity_analysis
 
 
 def _make_db() -> Database:
@@ -255,20 +254,6 @@ class TestStatsQueries(unittest.TestCase):
         db = _make_db()
         with self.assertRaises(ValueError):
             sensitivity_analysis("invalid_param", db)
-
-    def test_get_best_strategy(self) -> None:
-        """get_best_strategy() returns the name of the winning strategy."""
-        db = _make_db()
-        self._populate_db(db)
-        best = get_best_strategy(db)
-        self.assertIsNotNone(best)
-        self.assertIsInstance(best, str)
-
-    def test_get_best_strategy_empty_db(self) -> None:
-        """get_best_strategy() returns None if the DB is empty."""
-        db = _make_db()
-        best = get_best_strategy(db)
-        self.assertIsNone(best)
 
 
 if __name__ == "__main__":

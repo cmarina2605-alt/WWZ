@@ -48,6 +48,7 @@ if TYPE_CHECKING:
 def calculate_next_pos(
     agent: "Agent",
     world: "World",
+    nearby: List["Agent"] = None,
 ) -> Tuple[int, int]:
     """
     Calculates the next position for an agent.
@@ -58,6 +59,8 @@ def calculate_next_pos(
     Args:
         agent: The agent that is going to move.
         world: The shared world.
+        nearby: Optional pre-computed list of nearby agents (avoids
+                redundant get_agents_in_radius calls).
 
     Returns:
         Tuple (x, y) of the next position.
@@ -66,14 +69,18 @@ def calculate_next_pos(
     from agents.zombie import Zombie
 
     if isinstance(agent, Human):
-        return _human_next_pos(agent, world)
+        return _human_next_pos(agent, world, nearby)
     elif isinstance(agent, Zombie):
         return _zombie_next_pos(agent, world)
     else:
         return random_walk(agent.pos, world)
 
 
-def _human_next_pos(human: "Agent", world: "World") -> Tuple[int, int]:
+def _human_next_pos(
+    human: "Agent",
+    world: "World",
+    nearby: List["Agent"] = None,
+) -> Tuple[int, int]:
     """
     Calculates the next position for a human based on the active strategy.
 
@@ -91,18 +98,23 @@ def _human_next_pos(human: "Agent", world: "World") -> Tuple[int, int]:
     Args:
         human: The human agent.
         world: The shared world.
+        nearby: Optional pre-computed list of nearby agents.
 
     Returns:
         New position (x, y).
     """
+    from agents.zombie import Zombie
+
     strategy = getattr(world, "strategy", "none")
 
     # RANDOM strategy: total chaos, ignores zombies
     if strategy == "random":
         return random_walk(human.pos, world)
 
-    nearby = world.get_agents_in_radius(human.pos, config.VISION_HUMAN)
-    zombies = [a for a in nearby if a.__class__.__name__ == "Zombie"]
+    # Reuse cached nearby list if provided (avoids redundant grid scan)
+    if nearby is None:
+        nearby = world.get_agents_in_radius(human.pos, config.VISION_HUMAN)
+    zombies = [a for a in nearby if isinstance(a, Zombie)]
 
     if not zombies:
         # No immediate danger: apply strategic movement
@@ -284,32 +296,6 @@ def random_walk(
         if new_pos in world.land_cells:
             return new_pos
     return pos  # Stay in place if surrounded by water
-
-
-def panic_spread(agent: "Agent", world: "World") -> None:
-    """
-    Spreads panic among nearby agents.
-
-    If an agent has ≥4 neighbors in "running" state, it also enters
-    "running" state regardless of whether it sees zombies.
-
-    Args:
-        agent: The agent that may enter panic.
-        world: The shared world.
-    """
-    from agents.human import Human
-
-    if not isinstance(agent, Human):
-        return
-    if agent.state in ("fighting", "dead", "infected"):
-        return
-
-    nearby = world.get_agents_in_radius(agent.pos, 3)
-    running_count = sum(1 for a in nearby if a.state == "running")
-
-    if running_count >= 4 and agent.state == "calm":
-        agent.set_state("running")
-        agent.fear = min(100, agent.fear + 20)
 
 
 # ---------------------------------------------------------------------------

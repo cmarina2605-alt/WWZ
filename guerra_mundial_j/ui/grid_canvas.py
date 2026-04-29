@@ -3,104 +3,99 @@ grid_canvas.py — Tkinter Canvas that draws the U.S. map for the simulation.
 
 GridCanvas renders the world state on an approximate geographic map of the
 continental United States. The map is drawn once at startup (ocean, land,
-states, Great Lakes, key cities) and agents are overlaid frame by frame
-as colored rectangles.
+states, key cities) and agents are overlaid frame by frame as colored
+circles — one distinct color per agent role.
 
 Rendering layers (bottom to top):
     1. Ocean background (bg OCEAN_COLOR).
     2. Continental U.S. polygon (LAND_COLOR).
     3. State division lines (STATE_LINE_COLOR, dashed).
-    4. Great Lakes (LAKE_COLOR).
-    5. Key city markers (San Diego, Washington D.C., Atlanta, Fort Bragg).
-    6. Agent color legend (top-left corner).
-    7. Agent rectangles — updated each frame without recreating lower layers.
-
-Agent colors:
-    Red    — Normal
-    Green  — Military
-    Purple — Scientist
-    Blue   — Politician
-    Yellow — Zombie (they're all José!)
-    Orange — Infected (incubation)
-    Gray   — Dead
+    4. Key city markers (San Diego, Washington D.C., Atlanta, Fort Bragg).
+    5. Agent color legend (bottom-left corner).
+    6. Agent circles — updated each frame, big enough to be distinguishable.
 
 Optimization:
-    Agent rectangles are reused between frames (itemconfig instead of
-    delete+create). When clearing a cell, the rectangle is fully deleted
-    so the underlying map remains visible.
+    - Uses a PRE-ALLOCATED POOL of canvas oval items.
+    - Each frame only calls coords() and itemconfig() — no create/delete.
+    - This eliminates the Python→Tcl overhead of creating and destroying
+      hundreds of canvas items every 80ms.
 """
 
 import tkinter as tk
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, Optional
 
 import config
 
 
 class GridCanvas(tk.Canvas):
     """
-    Canvas that visualizes the agent grid on a U.S. map.
+    Canvas that visualizes the agent grid on a U.S. map using colored circles.
+
+    Uses a pre-allocated pool of canvas ovals that are repositioned each
+    frame instead of being deleted and recreated. This is dramatically
+    faster for Tkinter's canvas implementation.
 
     Attributes:
         canvas_size (int): Canvas size in pixels (square).
         cell_size (float): Size in pixels of each grid cell.
-        _rect_ids (Dict): Cache of agent rectangle IDs for reuse.
+        _pool (list): Pre-allocated canvas oval item IDs.
+        _pool_colors (list): Current fill color of each pool item (for diff).
+        _active (int): Number of pool items currently visible.
     """
 
     # ------------------------------------------------------------------
-    # Constantes de colores del mapa
+    # Map color constants
     # ------------------------------------------------------------------
     OCEAN_COLOR       = config.OCEAN_COLOR
     LAND_COLOR        = config.LAND_COLOR
     LAND_BORDER_COLOR = config.LAND_BORDER_COLOR
     STATE_LINE_COLOR  = config.STATE_LINE_COLOR
-    LAKE_COLOR        = config.LAKE_COLOR
-
-    # ------------------------------------------------------------------
-    # Agent legend  (label, color, shape)
-    # ------------------------------------------------------------------
-    LEGEND = [
-        ("Normal",     config.COLOR_NORMAL,     "circle"),
-        ("Military",   config.COLOR_MILITARY,   "square"),
-        ("Scientist",  config.COLOR_SCIENTIST,  "circle_outlined"),
-        ("Politician", config.COLOR_POLITICIAN, "diamond"),
-        ("Zombie",     config.COLOR_ZOMBIE,     "blob"),
-        ("Infected",   config.COLOR_INFECTED,   "circle"),
-    ]
 
     # ------------------------------------------------------------------
     # Map geometry
     # ------------------------------------------------------------------
 
-    # Approximate contour of the continental U.S. (shared with simulation layer)
     USA_POLYGON = config.USA_POLYGON
 
-    # Approximate state division lines (dashed strokes)
+    # Approximate state division lines (dashed strokes) — scaled to 250×250
     STATE_REGION_LINES = [
-        # Eastern border of Pacific states (CA / NV-AZ)
-        [(15, 3), (14, 20), (14, 40), (14, 60), (14, 78)],
-        # Eastern border of Mountain states (CO / Great Plains)
-        [(35, 2), (34, 20), (33, 40), (33, 60), (35, 83)],
-        # Mississippi River / central divider
-        [(56, 2), (55, 20), (55, 40), (55, 60), (54, 85)],
-        # Eastern states border
-        [(80, 5), (80, 20), (80, 40), (80, 60), (80, 64)],
+        [(38, 8), (36, 30), (35, 60), (35, 100), (35, 140), (35, 180), (35, 195)],
+        [(70, 5), (68, 30), (67, 60), (67, 100), (67, 140), (68, 180), (72, 210)],
+        [(108, 5), (106, 30), (105, 60), (105, 100), (106, 140), (108, 180), (108, 210)],
+        [(165, 8), (168, 30), (170, 60), (172, 80), (175, 100), (180, 120), (185, 140)],
+        [(35, 140), (70, 142), (108, 145), (140, 148), (170, 150), (200, 140)],
+        [(35, 60), (70, 58), (108, 56), (140, 55), (165, 54)],
     ]
 
-    # Great Lakes (cx, cy, rx, ry) in grid coords
-    GREAT_LAKES = [
-        (58, 17, 8, 4),  # Lake Superior
-        (63, 27, 4, 8),  # Lake Michigan
-        (70, 23, 6, 5),  # Lake Huron
-        (75, 29, 5, 3),  # Lake Erie
-        (80, 26, 4, 3),  # Lake Ontario
-    ]
-
-    # Key cities / zones: (config_pos, label_line1, label_line2, color)
+    # Key cities / zones
     CITY_MARKERS = [
-        ("OUTBREAK_POS",      "San Diego",       "🧪 Outbreak",      "#ff4444"),
-        ("WHITEHOUSE_POS",    "Washington D.C.", "🏛 White House",   "#ffffff"),
-        ("LAB_POS",           "Atlanta, GA",     "💉 CDC",            "#00cfff"),
-        ("MILITARY_BASE_POS", "Fort Bragg, NC",  "🎖 Military Base", "#00ff88"),
+        ("OUTBREAK_POS",      "San Diego",       "Outbreak",      "#ff4444"),
+        ("WHITEHOUSE_POS",    "Washington D.C.", "White House",   "#ffffff"),
+        ("LAB_POS",           "Atlanta, GA",     "CDC",           "#00cfff"),
+        ("MILITARY_BASE_POS", "Fort Bragg, NC",  "Military Base", "#00ff88"),
+    ]
+
+    # Color mapping: role → (fill_color, outline_color)
+    ROLE_COLORS: Dict[str, Tuple[str, str]] = {
+        "normal":     (config.COLOR_NORMAL,     "#5a7a90"),
+        "military":   (config.COLOR_MILITARY,   "#a08830"),
+        "scientist":  (config.COLOR_SCIENTIST,  "#cccccc"),
+        "politician": (config.COLOR_POLITICIAN, "#9050b0"),
+        "president":  (config.COLOR_PRESIDENT,  "#cc9900"),
+        "zombie":     (config.COLOR_ZOMBIE,     "#00cc33"),
+        "infected":   (config.COLOR_INFECTED,   "#cc4400"),
+        "dead":       (config.COLOR_DEAD,       "#1a1a1a"),
+    }
+
+    # Legend entries: (label, role_key)
+    LEGEND_ENTRIES = [
+        ("Normal",     "normal"),
+        ("Military",   "military"),
+        ("Scientist",  "scientist"),
+        ("Politician", "politician"),
+        ("President",  "president"),
+        ("Zombie",     "zombie"),
+        ("Infected",   "infected"),
     ]
 
     # ------------------------------------------------------------------
@@ -108,13 +103,6 @@ class GridCanvas(tk.Canvas):
     # ------------------------------------------------------------------
 
     def __init__(self, parent: tk.Widget, size: int = config.CANVAS_SIZE) -> None:
-        """
-        Initializes the canvas with ocean background and draws the base map.
-
-        Args:
-            parent: Tkinter parent widget.
-            size: Canvas size in pixels (width and height).
-        """
         super().__init__(
             parent,
             width=size,
@@ -124,23 +112,29 @@ class GridCanvas(tk.Canvas):
         )
         self.canvas_size: int = size
         self.cell_size: float = size / config.GRID_SIZE
-        self._rect_ids: Dict[Tuple[int, int], int] = {}
-        self._cell_shape: Dict[Tuple[int, int], str] = {}  # "oval" | "rect"
 
-        # Draw static map (layers 1-5)
+        # Agent circle radii
+        self._dot_radius: float = max(2.0, self.cell_size * 1.0)
+        self._zombie_radius: float = max(3.0, self.cell_size * 1.6)
+
+        # Pre-allocated pool of canvas items (avoids create/delete per frame)
+        self._pool: list = []
+        self._pool_colors: list = []   # track current fill to skip no-ops
+        self._active: int = 0          # how many pool items are currently visible
+
+        # Draw static map layers
         self._draw_usa_background()
         self._draw_zones()
         self._draw_legend()
 
     # ------------------------------------------------------------------
-    # Static map
+    # Static map drawing
     # ------------------------------------------------------------------
 
     def _draw_usa_background(self) -> None:
-        """Draws the continental U.S. polygon and state divisions."""
+        """Draws the continental U.S. polygon with state division lines."""
         cs = self.cell_size
 
-        # Continental polygon
         pts = []
         for gx, gy in self.USA_POLYGON:
             pts.extend([gx * cs, gy * cs])
@@ -151,32 +145,22 @@ class GridCanvas(tk.Canvas):
             width=1.5,
         )
 
-        # State division lines (dashed, slightly brighter for readability)
+        # Draw approximate state division lines for visual context
         for line in self.STATE_REGION_LINES:
             pts = []
             for gx, gy in line:
                 pts.extend([gx * cs, gy * cs])
-            self.create_line(
-                pts,
-                fill="#3a6030",
-                width=1,
-                dash=(5, 4),
-            )
-
-    def _draw_great_lakes(self) -> None:
-        """Draws the Great Lakes as blue ovals."""
-        cs = self.cell_size
-        for cx, cy, rx, ry in self.GREAT_LAKES:
-            self.create_oval(
-                (cx - rx) * cs, (cy - ry) * cs,
-                (cx + rx) * cs, (cy + ry) * cs,
-                fill=self.LAKE_COLOR,
-                outline="#2a6a9b",
-                width=0.5,
-            )
+            if len(pts) >= 4:
+                self.create_line(
+                    pts,
+                    fill=self.STATE_LINE_COLOR,
+                    width=0.8,
+                    dash=(4, 6),
+                    smooth=True,
+                )
 
     def _draw_zones(self) -> None:
-        """Draws key city markers with name and emoji."""
+        """Draws key city markers with name and label."""
         cs = self.cell_size
         r = max(8, config.LAB_RADIUS * cs)
 
@@ -184,28 +168,23 @@ class GridCanvas(tk.Canvas):
             gx, gy = getattr(config, attr)
             px, py = gx * cs, gy * cs
 
-            # Outer glow ring
             self.create_oval(
                 px - r - 3, py - r - 3, px + r + 3, py + r + 3,
                 outline=color, fill="", width=0.5, dash=(2, 4),
             )
-            # Dashed circle
             self.create_oval(
                 px - r, py - r, px + r, py + r,
                 outline=color, fill="", width=1.5, dash=(3, 3),
             )
-            # Center crosshair dot
             self.create_oval(
                 px - 3, py - 3, px + 3, py + 3,
                 fill=color, outline="#000000", width=1,
             )
-            # City name
             self.create_text(
                 px, py - r - 12,
                 text=line1, fill=color,
                 font=("Consolas", 8, "bold"),
             )
-            # Role label
             self.create_text(
                 px, py - r - 2,
                 text=line2, fill=color,
@@ -213,189 +192,161 @@ class GridCanvas(tk.Canvas):
             )
 
     def _draw_legend(self) -> None:
-        """Draws the agent type legend in the bottom-left corner using real shapes."""
+        """Draws the agent type legend in the bottom-left corner using colored circles."""
         cs = self.cell_size
-        x0 = int(4 * cs)
-        y0 = int(84 * cs)
-        box = 8
-        row_h = 14
-        pad = 4
+        x0 = int(10 * cs)
+        y0 = int(210 * cs)
+        dot_r = 5
+        row_h = 18
+        pad = 6
 
-        total_h = len(self.LEGEND) * row_h + pad * 2
+        total_h = len(self.LEGEND_ENTRIES) * row_h + pad * 2
+
         self.create_rectangle(
             x0 - pad, y0 - pad,
-            x0 + 75, y0 + total_h - pad,
-            fill="#000000", outline="", stipple="gray50",
+            x0 + 100, y0 + total_h - pad,
+            fill="#000000", outline="#333333", width=1, stipple="gray50",
         )
 
         y = y0
-        for label, color, shape in self.LEGEND:
-            cx = x0 + box // 2
-            cy = y + box // 2
-            x1, y1 = x0, y
-            x2, y2 = x0 + box, y + box
-
-            if shape == "blob":
-                self.create_oval(x1 - 1, y1 - 1, x2 + 1, y2 + 1,
-                                 fill=color, outline="#001a00", width=1.5)
-            elif shape == "square":
-                self.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
-            elif shape == "diamond":
-                self.create_polygon(cx, y1, x2, cy, cx, y2, x1, cy,
-                                    fill=color, outline="")
-            elif shape == "circle_outlined":
-                self.create_oval(x1, y1, x2, y2,
-                                 fill=color, outline="#ffffff", width=1)
-            else:
-                self.create_oval(x1, y1, x2, y2, fill=color, outline="")
-
+        for label, role_key in self.LEGEND_ENTRIES:
+            fill, outline = self.ROLE_COLORS.get(role_key, ("#888888", "#666666"))
+            cy = y + dot_r + 2
+            self.create_oval(
+                x0, cy - dot_r,
+                x0 + dot_r * 2, cy + dot_r,
+                fill=fill, outline=outline, width=1,
+            )
             self.create_text(
-                x0 + box + 4, cy,
+                x0 + dot_r * 2 + 6, cy,
                 text=label, anchor="w",
-                fill="#dddddd", font=("Consolas", 7),
+                fill="#dddddd", font=("Consolas", 8),
             )
             y += row_h
 
     # ------------------------------------------------------------------
-    # Agent rendering (frame by frame)
+    # Pool management
     # ------------------------------------------------------------------
+
+    def _ensure_pool(self, n: int) -> None:
+        """
+        Grows the pool to at least n items if needed.
+
+        New items are created hidden and off-screen. They will be
+        positioned and shown by render().
+        """
+        while len(self._pool) < n:
+            item_id = self.create_oval(
+                -10, -10, -10, -10,
+                fill="", outline="", width=1,
+                state="hidden",
+                tags="agent",
+            )
+            self._pool.append(item_id)
+            self._pool_colors.append("")
+
+    # ------------------------------------------------------------------
+    # Agent rendering (frame by frame) — pool-based colored circles
+    # ------------------------------------------------------------------
+
+    def _resolve_role_key(
+        self,
+        agent_type: str,
+        role: str,
+        state: str,
+        is_president: bool = False,
+    ) -> str:
+        """
+        Determines which color role key to use for a given agent.
+
+        Priority order:
+            1. Dead agents → "dead"
+            2. Infected humans → "infected"
+            3. Zombies → "zombie"
+            4. President → "president"
+            5. Role-specific (military, scientist, politician)
+            6. Fallback → "normal"
+        """
+        if state == "dead":
+            return "dead"
+        if state == "infected" and agent_type != "Zombie":
+            return "infected"
+        if agent_type == "Zombie":
+            return "zombie"
+        if is_president or role == "president":
+            return "president"
+        if role in ("military", "scientist", "politician"):
+            return role
+        return "normal"
 
     def render(
         self,
         snapshot: Dict[Tuple[int, int], Dict[str, str]],
     ) -> None:
         """
-        Updates visible agents from the Engine snapshot.
+        Updates visible agents from the Engine snapshot using a pre-allocated
+        pool of canvas ovals.
 
-        Clears cells that no longer have an agent (deletes the item so
-        the underlying map is visible) and draws/updates new ones.
-        Agents below the overlay tag are inserted beneath it.
+        Instead of deleting and creating canvas items every frame (slow),
+        this method repositions existing items with coords() and only
+        calls itemconfig() when the color changes. Hidden items are
+        parked off-screen.
 
         Args:
-            snapshot: Dict of {(x, y): {"color", "type", "role", "state"}} from World.
+            snapshot: Dict of {(x, y): {"type", "role", "state", ...}} from World.
         """
-        stale = set(self._rect_ids.keys()) - set(snapshot.keys())
-        for pos in stale:
-            self._clear_cell(pos)
+        items = list(snapshot.items())
+        n = len(items)
+        self._ensure_pool(n)
 
-        for pos, agent_data in snapshot.items():
-            color     = agent_data.get("color", config.COLOR_NORMAL)
-            agent_type = agent_data.get("type", "")
-            role      = agent_data.get("role", "")
-            state     = agent_data.get("state", "")
-            self._draw_cell(pos, color, agent_type, role, state)
+        cs = self.cell_size
+        r_default = self._dot_radius
+        r_zombie = self._zombie_radius
 
-    # Shape key per role — used to detect when a recreate is needed
-    _ROLE_SHAPE: Dict[str, str] = {
-        "normal":    "circle",
-        "scientist": "circle_outlined",
-        "military":  "square",
-        "politician":"diamond",
-        "zombie":    "blob",
-    }
+        for i, (pos, agent_data) in enumerate(items):
+            item_id = self._pool[i]
 
-    def _draw_cell(
-        self,
-        pos: Tuple[int, int],
-        color: str,
-        agent_type: str = "",
-        role: str = "",
-        state: str = "",
-    ) -> None:
-        """
-        Draws or updates an agent using a shape that reflects its role:
-          Zombie     → large circle with dark outline (blob)
-          Military   → square  (angular, soldier-like)
-          Politician → diamond (rotated square)
-          Scientist  → circle with white outline
-          Normal/Infected/Dead → plain circle
-        """
-        cs  = self.cell_size
-        pad = max(1.0, cs * 0.1)
-        x1  = pos[0] * cs + pad
-        y1  = pos[1] * cs + pad
-        x2  = pos[0] * cs + cs - pad
-        y2  = pos[1] * cs + cs - pad
-        cx  = (x1 + x2) / 2
-        cy  = (y1 + y2) / 2
-
-        # Determine canonical shape key
-        if agent_type == "Zombie":
-            shape = "blob"
-        elif role == "military":
-            shape = "square"
-        elif role == "politician":
-            shape = "diamond"
-        elif role == "scientist":
-            shape = "circle_outlined"
-        else:
-            shape = "circle"
-
-        # Recreate if shape type changed
-        if pos in self._rect_ids:
-            if self._cell_shape.get(pos) != shape:
-                self.delete(self._rect_ids[pos])
-                del self._rect_ids[pos]
-                del self._cell_shape[pos]
-            else:
-                self.itemconfig(self._rect_ids[pos], fill=color)
-                return
-
-        # ---- Create new canvas item ----
-        if shape == "blob":
-            # Zombie: full-cell neon circle with thick dark outline (no extra items)
-            item_id = self.create_oval(
-                x1 - 1, y1 - 1, x2 + 1, y2 + 1,
-                fill=color, outline="#001a00", width=2,
-            )
-        elif shape == "square":
-            # Military: sharp square
-            item_id = self.create_rectangle(
-                x1, y1, x2, y2,
-                fill=color, outline="",
-            )
-        elif shape == "diamond":
-            # Politician: rotated square (diamond)
-            item_id = self.create_polygon(
-                cx, y1,   # top
-                x2, cy,   # right
-                cx, y2,   # bottom
-                x1, cy,   # left
-                fill=color, outline="",
-            )
-        elif shape == "circle_outlined":
-            # Scientist: circle with bright outline
-            item_id = self.create_oval(
-                x1, y1, x2, y2,
-                fill=color, outline="#ffffff", width=1.2,
-            )
-        else:
-            # Normal / infected / dead: plain circle
-            item_id = self.create_oval(
-                x1, y1, x2, y2,
-                fill=color, outline="",
+            role_key = self._resolve_role_key(
+                agent_data.get("type", ""),
+                agent_data.get("role", ""),
+                agent_data.get("state", ""),
+                agent_data.get("is_president", False),
             )
 
-        try:
-            self.tag_lower(item_id, "overlay")
-        except Exception:
-            pass
-        self._rect_ids[pos] = item_id
-        self._cell_shape[pos] = shape
+            # Zombies get a bigger circle so they stand out
+            r = r_zombie if role_key == "zombie" else r_default
 
-    def _clear_cell(self, pos: Tuple[int, int]) -> None:
-        """Removes an agent's shape to expose the map."""
-        if pos in self._rect_ids:
-            self.delete(self._rect_ids[pos])
-            del self._rect_ids[pos]
-            self._cell_shape.pop(pos, None)
+            # Reposition the circle
+            px = pos[0] * cs + cs / 2
+            py = pos[1] * cs + cs / 2
+            self.coords(item_id, px - r, py - r, px + r, py + r)
+
+            # Only update color if it changed (itemconfig is expensive)
+            if self._pool_colors[i] != role_key:
+                fill, outline = self.ROLE_COLORS.get(role_key, ("#888888", "#666666"))
+                self.itemconfig(item_id, fill=fill, outline=outline, state="normal")
+                self._pool_colors[i] = role_key
+            elif i >= self._active:
+                # Item was hidden, make it visible
+                self.itemconfig(item_id, state="normal")
+
+        # Hide any pool items beyond what we need
+        for i in range(n, self._active):
+            self.itemconfig(self._pool[i], state="hidden")
+            self._pool_colors[i] = ""
+
+        self._active = n
 
     def clear(self) -> None:
-        """Removes all agent shapes (without touching the base map)."""
-        for item_id in self._rect_ids.values():
-            self.delete(item_id)
-        self._rect_ids.clear()
-        self._cell_shape.clear()
+        """Hides all agent circles (without touching the base map)."""
+        for i in range(self._active):
+            self.itemconfig(self._pool[i], state="hidden")
+            self._pool_colors[i] = ""
+        self._active = 0
+
+    # ------------------------------------------------------------------
+    # Game over overlay
+    # ------------------------------------------------------------------
 
     def show_game_over(self, result: str) -> None:
         """
@@ -419,19 +370,16 @@ class GridCanvas(tk.Canvas):
             sub    = "The infection has consumed the nation"
             color  = "#ff4444"
 
-        # Semi-transparent dark veil
         self.create_rectangle(
             0, 0, w, h,
             fill=bg, outline="", stipple="gray75",
             tags="overlay",
         )
-        # Decorative box
         self.create_rectangle(
             w // 4, h // 2 - 60, 3 * w // 4, h // 2 + 60,
             fill="#000000", outline=color, width=2, stipple="gray50",
             tags="overlay",
         )
-        # Main result text
         self.create_text(
             w // 2, h // 2 - 18,
             text=title,
@@ -439,7 +387,6 @@ class GridCanvas(tk.Canvas):
             font=("Consolas", 20, "bold"),
             tags="overlay",
         )
-        # Sub-text
         self.create_text(
             w // 2, h // 2 + 18,
             text=sub,
@@ -451,16 +398,3 @@ class GridCanvas(tk.Canvas):
     def clear_overlay(self) -> None:
         """Removes the game-over overlay."""
         self.delete("overlay")
-
-    # ------------------------------------------------------------------
-    # Utilities
-    # ------------------------------------------------------------------
-
-    def pos_to_grid(self, pixel_x: int, pixel_y: int) -> Tuple[int, int]:
-        """Converts pixel coordinates to grid cell."""
-        grid_x = int(pixel_x / self.cell_size)
-        grid_y = int(pixel_y / self.cell_size)
-        return (
-            max(0, min(config.GRID_SIZE - 1, grid_x)),
-            max(0, min(config.GRID_SIZE - 1, grid_y)),
-        )

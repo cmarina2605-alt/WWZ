@@ -1,32 +1,33 @@
 """
-database.py — SQLite data access layer for the simulation.
+database.py — Singleton SQLite data access layer with batched write queue.
 
-The Database class is a thread-safe wrapper over sqlite3 that encapsulates
-all CRUD operations on simulations.db. All methods acquire an internal
-threading.Lock before accessing the connection, so it can be called from
-multiple threads without risk of corruption.
+Design Pattern: SINGLETON
+    Ensures only one Database instance exists across the entire simulation.
+    Since sqlite3.Connection can only be safely used from the thread that
+    created it, the Singleton wraps a queue.Queue and a dedicated writer
+    thread. Agent threads call db.log_event() which enqueues a dict and
+    returns immediately (non-blocking). The writer thread batches inserts
+    into transactions, avoiding one-commit-per-event overhead.
 
-Write methods:
-    save_simulation(data)           — inserts a simulation, returns its ID.
-    save_event(sim_id, type, tick, desc) — adds an event to a simulation.
-    update_simulation_result(...)   — updates result, duration and final
-                                      counts when the simulation ends.
+Benefits:
+    - Agent threads never block on disk I/O.
+    - Batched writes: multiple events per transaction improve throughput.
+    - Thread-safe by construction (queue + dedicated writer).
+    - Single instance prevents accidental multiple connections.
 
-Read methods:
-    get_all_simulations()           — all simulations, most recent first.
-    load_simulation(seed)           — most recent simulation with that seed.
-    get_events(sim_id)              — events of a simulation, ordered by tick.
-    get_simulation_count()          — total number of simulations in the DB.
+Usage:
+    db = Database()               # always returns the same instance
+    db.log_event(sim_id, "infection", tick=42, description="...")
+    db.save_simulation({...})     # synchronous (for batch mode)
+    db.close()                    # stops writer thread and flushes
 
-Typical usage:
-    db = Database()           # opens/creates simulations.db
-    sim_id = db.save_simulation({...})
-    db.save_event(sim_id, "antidote", tick=420, description="...")
-    db.close()
+References:
+    https://refactoring.guru/design-patterns/singleton
 """
 
 import sqlite3
 import threading
+import queue
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
@@ -41,28 +42,57 @@ from db.models import (
 )
 
 
-class Database:
+class _DatabaseMeta(type):
     """
-    SQLite database access class for the simulation.
+    Thread-safe Singleton metaclass for Database (keyed by db_path).
 
-    Manages the connection and provides high-level CRUD methods for
-    simulations and events. Thread-safe thanks to an internal Lock.
+    Guarantees that Database() always returns the same instance
+    for a given db_path, even if called simultaneously from multiple
+    threads. Different paths (e.g. ":memory:" for tests) get their own
+    instances.
+    """
+    _instances: dict = {}
+    _lock: threading.Lock = threading.Lock()
+
+    def __call__(cls, *args, **kwargs):
+        # Use db_path as the key so tests with ":memory:" get separate instances.
+        # ":memory:" always creates a new instance (each one is independent).
+        db_path = args[0] if args else kwargs.get("db_path", config.DB_PATH)
+        if db_path == ":memory:":
+            return super().__call__(*args, **kwargs)
+        with cls._lock:
+            if db_path not in cls._instances:
+                instance = super().__call__(*args, **kwargs)
+                cls._instances[db_path] = instance
+            return cls._instances[db_path]
+
+
+class Database(metaclass=_DatabaseMeta):
+    """
+    Singleton SQLite database with a dedicated writer thread.
+
+    The writer thread consumes from an internal queue and batches
+    writes into transactions. Read operations use a separate connection
+    with a lock for thread safety.
 
     Attributes:
-        db_path (str): Path to the SQLite file (":memory:" for tests).
-        _conn (sqlite3.Connection): Active connection.
-        _lock (threading.Lock): Protects concurrent access.
+        db_path (str): Path to the SQLite file.
+        _write_queue (queue.Queue): Queue for non-blocking event inserts.
+        _writer_thread (threading.Thread): Dedicated writer thread.
+        _conn (sqlite3.Connection): Connection for reads (+ sync writes).
+        _lock (threading.Lock): Protects _conn for reads.
     """
 
-    def __init__(self, db_path: str = config.DB_PATH) -> None:
-        """
-        Initializes the database and creates tables if they don't exist.
+    BATCH_SIZE = 50          # Max events per transaction
+    FLUSH_INTERVAL = 0.5     # Seconds between batch flushes
 
-        Args:
-            db_path: Path to the .db file. Use ":memory:" for tests.
-        """
+    def __init__(self, db_path: str = config.DB_PATH) -> None:
         self.db_path: str = db_path
         self._lock: threading.Lock = threading.Lock()
+        self._write_queue: queue.Queue = queue.Queue()
+        self._running: bool = True
+
+        # Main connection (reads + synchronous writes like save_simulation)
         self._conn: sqlite3.Connection = sqlite3.connect(
             db_path,
             check_same_thread=False,
@@ -70,19 +100,25 @@ class Database:
         self._conn.row_factory = sqlite3.Row
         self.init_db()
 
+        # Start dedicated writer thread for async event logging
+        self._writer_thread = threading.Thread(
+            target=self._writer_loop,
+            daemon=True,
+            name="DB-Writer",
+        )
+        self._writer_thread.start()
+
     # ------------------------------------------------------------------
     # Initialization
     # ------------------------------------------------------------------
 
     def init_db(self) -> None:
-        """
-        Creates tables and indexes if they don't exist yet.
-
-        Runs the full SCHEMA_SQL from models.py.
-        """
+        """Creates tables and indexes if they don't exist. Enables WAL mode."""
         with self._lock:
+            # WAL mode allows concurrent reads while writing,
+            # which is ideal for our multi-threaded simulation
+            self._conn.execute("PRAGMA journal_mode=WAL")
             cursor = self._conn.cursor()
-            # Execute individual statements (executescript ignores params)
             for statement in SCHEMA_SQL.split(";"):
                 stmt = statement.strip()
                 if stmt:
@@ -90,28 +126,92 @@ class Database:
             self._conn.commit()
 
     # ------------------------------------------------------------------
-    # Write methods
+    # Async event writer (batched transactions)
+    # ------------------------------------------------------------------
+
+    def _writer_loop(self) -> None:
+        """
+        Dedicated writer thread that consumes events from the queue
+        and batches them into SQLite transactions.
+
+        This avoids one INSERT + COMMIT per event, which is the main
+        bottleneck for SQLite under multi-threaded workloads.
+        """
+        # Separate connection for the writer thread (sqlite3 requirement)
+        writer_conn = sqlite3.connect(self.db_path)
+
+        while self._running or not self._write_queue.empty():
+            batch: List[tuple] = []
+            try:
+                # Wait for the first item (blocking)
+                item = self._write_queue.get(timeout=self.FLUSH_INTERVAL)
+                batch.append(item)
+                self._write_queue.task_done()
+            except queue.Empty:
+                continue
+
+            # Drain up to BATCH_SIZE more items without blocking
+            while len(batch) < self.BATCH_SIZE:
+                try:
+                    item = self._write_queue.get_nowait()
+                    batch.append(item)
+                    self._write_queue.task_done()
+                except queue.Empty:
+                    break
+
+            # Execute batch in a single transaction
+            if batch:
+                try:
+                    cursor = writer_conn.cursor()
+                    for sim_id, event_type, tick, description in batch:
+                        cursor.execute(
+                            INSERT_EVENT,
+                            (sim_id, event_type, tick, description),
+                        )
+                    writer_conn.commit()
+                except Exception as exc:
+                    print(f"[DB-Writer] Error writing batch: {exc}")
+
+        writer_conn.close()
+
+    def log_event(
+        self,
+        sim_id: int,
+        event_type: str,
+        tick: int,
+        description: str,
+    ) -> None:
+        """
+        Non-blocking event log: enqueues the event for batched writing.
+
+        Agent threads call this instead of save_event() so they never
+        block on disk I/O.
+
+        Args:
+            sim_id: Simulation ID.
+            event_type: Event type string.
+            tick: Simulation tick.
+            description: Human-readable description.
+        """
+        self._write_queue.put((sim_id, event_type, tick, description))
+
+    # ------------------------------------------------------------------
+    # Synchronous write methods (for batch mode / end-of-sim)
     # ------------------------------------------------------------------
 
     def save_simulation(self, data: Dict[str, Any]) -> int:
         """
-        Saves simulation data and returns its ID.
+        Saves simulation data (synchronous). Returns the assigned ID.
 
         Args:
-            data: Dict with simulations table fields.
-                  Expected keys: seed, p_infect, vision_human,
-                  vision_zombie, strategy, n_scientists, n_military,
-                  n_politicians, result, duration, humans_final,
-                  zombies_final, tick_final.
+            data: Dict with simulation table fields.
 
         Returns:
-            int: ID assigned to the saved simulation.
+            int: ID of the saved simulation.
         """
-        # Add timestamp if not in data
         if "timestamp" not in data:
             data["timestamp"] = datetime.now(timezone.utc).isoformat()
 
-        # Default values for optional fields
         defaults: Dict[str, Any] = {
             "vision_human": config.VISION_HUMAN,
             "vision_zombie": config.VISION_ZOMBIE,
@@ -140,15 +240,7 @@ class Database:
         tick: int,
         description: str,
     ) -> None:
-        """
-        Saves an event associated with a simulation.
-
-        Args:
-            sim_id: ID of the simulation the event belongs to.
-            event_type: Event type (e.g. "infection", "death").
-            tick: Tick when the event occurred.
-            description: Human-readable description of the event.
-        """
+        """Synchronous event save (backward compatibility)."""
         with self._lock:
             cursor = self._conn.cursor()
             cursor.execute(INSERT_EVENT, (sim_id, event_type, tick, description))
@@ -163,17 +255,7 @@ class Database:
         zombies_final: int,
         tick_final: int,
     ) -> None:
-        """
-        Updates the result of an already saved simulation.
-
-        Args:
-            sim_id: Simulation ID.
-            result: "humans_win" | "zombies_win".
-            duration: Duration in seconds.
-            humans_final: Living humans at the end.
-            zombies_final: Zombies at the end.
-            tick_final: Tick when it ended.
-        """
+        """Updates the result of an already saved simulation."""
         sql = """
             UPDATE simulations
             SET result = ?, duration = ?, humans_final = ?,
@@ -191,53 +273,44 @@ class Database:
     # Read methods
     # ------------------------------------------------------------------
 
-    def get_all_simulations(self) -> List[Dict[str, Any]]:
+    def execute_query(
+        self, sql: str, params: tuple = ()
+    ) -> List[Dict[str, Any]]:
         """
-        Returns all saved simulations, ordered by date.
+        Executes a read-only SQL query and returns a list of row dicts.
+
+        This is the public API for running arbitrary SELECT queries
+        against the database. It acquires the internal lock, executes
+        the query, and returns the results as a list of dictionaries.
+
+        Args:
+            sql: SQL SELECT statement to execute.
+            params: Optional tuple of query parameters.
 
         Returns:
-            List of dicts with each simulation's data.
+            List of dicts, one per row.
         """
+        with self._lock:
+            cursor = self._conn.execute(sql, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_all_simulations(self) -> List[Dict[str, Any]]:
         with self._lock:
             cursor = self._conn.execute(SELECT_ALL_SIMULATIONS)
             return [dict(row) for row in cursor.fetchall()]
 
     def load_simulation(self, seed: int) -> Optional[Dict[str, Any]]:
-        """
-        Loads the most recent simulation with the given seed.
-
-        Args:
-            seed: Random seed to search for.
-
-        Returns:
-            Dict with simulation data, or None if not found.
-        """
         with self._lock:
             cursor = self._conn.execute(SELECT_SIMULATION_BY_SEED, (seed,))
             row = cursor.fetchone()
             return dict(row) if row else None
 
     def get_events(self, sim_id: int) -> List[Dict[str, Any]]:
-        """
-        Returns all events of a simulation.
-
-        Args:
-            sim_id: Simulation ID.
-
-        Returns:
-            List of event dicts, ordered by tick.
-        """
         with self._lock:
             cursor = self._conn.execute(SELECT_EVENTS_BY_SIM, (sim_id,))
             return [dict(row) for row in cursor.fetchall()]
 
     def get_simulation_count(self) -> int:
-        """
-        Returns the total number of saved simulations.
-
-        Returns:
-            int: Number of rows in the simulations table.
-        """
         with self._lock:
             cursor = self._conn.execute("SELECT COUNT(*) FROM simulations")
             return cursor.fetchone()[0]
@@ -247,9 +320,12 @@ class Database:
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Closes the database connection."""
+        """Stops the writer thread, flushes remaining events, and closes."""
+        self._running = False
+        if self._writer_thread.is_alive():
+            self._writer_thread.join(timeout=3.0)
         with self._lock:
             self._conn.close()
 
     def __repr__(self) -> str:
-        return f"Database(path={self.db_path!r})"
+        return f"Database(path={self.db_path!r}, queue_size={self._write_queue.qsize()})"

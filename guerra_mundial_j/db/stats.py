@@ -18,12 +18,6 @@ Main functions:
         Prints a formatted summary to the console after a batch run.
         Shows: strategies sorted by win_rate, sensitivity to p_infect.
 
-    get_best_strategy(db)
-        → str | None  — name of the strategy with the highest win_rate_pct.
-
-    get_recent_simulations(limit, db)
-        → List[Dict]  — the N most recent simulations from the database.
-
 All functions accept db=None and create an instance with the default path
 if not provided, to facilitate use from the CLI.
 """
@@ -52,9 +46,7 @@ def analyze_strategies(db: Optional[Database] = None) -> Dict[str, Dict[str, Any
     if db is None:
         db = Database()
 
-    with db._lock:
-        cursor = db._conn.execute(SELECT_WIN_RATE_BY_STRATEGY)
-        rows = cursor.fetchall()
+    rows = db.execute_query(SELECT_WIN_RATE_BY_STRATEGY)
 
     result: Dict[str, Dict[str, Any]] = {}
     for row in rows:
@@ -100,7 +92,7 @@ def sensitivity_analysis(
         query = SELECT_SENSITIVITY_P_INFECT
         bucket_col = "p_infect_bucket"
     else:
-        # Dynamic construction for vision
+        # Dynamic construction for vision parameters
         query = f"""
             SELECT
                 {param} AS bucket,
@@ -116,9 +108,7 @@ def sensitivity_analysis(
         """
         bucket_col = "bucket"
 
-    with db._lock:
-        cursor = db._conn.execute(query)
-        rows = cursor.fetchall()
+    rows = db.execute_query(query)
 
     return [
         {
@@ -174,38 +164,3 @@ def print_summary(db: Optional[Database] = None) -> None:
     print(f"\n{'='*60}\n")
 
 
-def get_best_strategy(db: Optional[Database] = None) -> Optional[str]:
-    """
-    Returns the name of the strategy with the highest win rate.
-
-    Args:
-        db: Database instance.
-
-    Returns:
-        Name of the best strategy, or None if there is no data.
-    """
-    strategies = analyze_strategies(db)
-    if not strategies:
-        return None
-    return max(strategies, key=lambda s: strategies[s]["win_rate_pct"])
-
-
-def get_recent_simulations(
-    limit: int = 10,
-    db: Optional[Database] = None,
-) -> List[Dict[str, Any]]:
-    """
-    Returns the most recent simulations.
-
-    Args:
-        limit: Maximum number of simulations to return.
-        db: Database instance.
-
-    Returns:
-        List of dicts with each simulation's data.
-    """
-    if db is None:
-        db = Database()
-
-    all_sims = db.get_all_simulations()
-    return all_sims[:limit]

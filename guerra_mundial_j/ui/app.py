@@ -27,7 +27,6 @@ User actions (called from ControlPanel):
 """
 
 import tkinter as tk
-from tkinter import ttk
 from typing import Optional, TYPE_CHECKING
 
 import config
@@ -76,6 +75,9 @@ class App(tk.Tk):
 
         self._build_layout()
         self._start_ui_loop()
+
+        # Clean shutdown on window close
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ------------------------------------------------------------------
     # Layout construction
@@ -187,6 +189,8 @@ class App(tk.Tk):
             "tick":      snapshot["tick"],
             "phase":     snapshot.get("phase", "🧟 Outbreak"),
             "strategy":  strategy_labels.get(strategy, strategy),
+            "avg_food":  f"{snapshot.get('avg_food', 0):.0f}%",
+            "avg_water": f"{snapshot.get('avg_water', 0):.0f}%",
             "antidote":  antidote_str,
             "result":    snapshot["result"] or "In progress",
         })
@@ -205,6 +209,12 @@ class App(tk.Tk):
             self._last_result = result
             self.grid_canvas.show_game_over(result)
 
+        # Update button states (Start/Pause visual feedback)
+        self.control_panel.set_button_state(
+            running=self.engine.running,
+            paused=self.engine.paused,
+        )
+
         # Display new events
         events = self.engine.world.pop_events()
         for event in events:
@@ -215,20 +225,41 @@ class App(tk.Tk):
     # ------------------------------------------------------------------
 
     def action_start(self) -> None:
-        """Starts the simulation if not already running."""
+        """
+        Starts the simulation using the Command pattern.
+
+        Creates and executes a StartCommand through the engine's
+        CommandHistory, which logs the action for replay.
+        """
+        from commands import StartCommand
         if not self.engine.running:
-            self.engine.start_simulation()
+            cmd = StartCommand(self.engine)
+            self.engine.command_history.execute(cmd)
             self.event_log.add_event("▶️ Simulation started")
 
     def action_pause(self) -> None:
-        """Pauses or resumes the simulation."""
-        self.engine.pause()
-        state = "⏸ Paused" if self.engine.paused else "▶️ Resumed"
-        self.event_log.add_event(state)
+        """
+        Pauses or resumes the simulation using the Command pattern.
+
+        Creates and executes a PauseCommand through the engine's
+        CommandHistory.
+        """
+        from commands import PauseCommand
+        cmd = PauseCommand(self.engine)
+        self.engine.command_history.execute(cmd)
+        self.event_log.add_event(cmd.description)
 
     def action_reset(self) -> None:
-        """Resets the simulation."""
-        self.engine.reset()
+        """
+        Resets the simulation using the Command pattern.
+
+        Creates and executes a ResetCommand through the engine's
+        CommandHistory, then clears the history itself.
+        """
+        from commands import ResetCommand
+        cmd = ResetCommand(self.engine)
+        cmd.execute()   # Don't log resets — they wipe the history anyway
+        self.engine.command_history.clear()
         self.engine.n_humans_initial = config.NUM_HUMANS
         self.engine.n_zombies_initial = config.NUM_ZOMBIES
         self.grid_canvas.clear()
@@ -242,7 +273,8 @@ class App(tk.Tk):
         """
         Runs n simulations in batch mode (without intermediate UI).
 
-        Results are saved to the database.
+        Results are saved to the database. All Tkinter widget updates
+        are scheduled via self.after() to avoid cross-thread access.
 
         Args:
             n: Number of simulations to run.
@@ -251,15 +283,19 @@ class App(tk.Tk):
         from db.stats import print_summary
         import threading
 
+        def _log(msg: str) -> None:
+            """Thread-safe event log: schedule on the main thread."""
+            self.after(0, lambda: self.event_log.add_event(msg))
+
         def _batch():
             from simulation.engine import Engine
+            import time
             db = Database()
-            self.event_log.add_event(f"🔁 Starting batch of {n} simulations...")
+            _log(f"🔁 Starting batch of {n} simulations...")
             for i in range(n):
                 eng = Engine()
                 eng.start_simulation()
-                # Esperar a que termine
-                import time
+                # Wait for the simulation to finish
                 timeout = 60  # max seconds per simulation
                 start = time.time()
                 while eng.running and (time.time() - start) < timeout:
@@ -276,9 +312,34 @@ class App(tk.Tk):
                     "tick_final": stats["tick"],
                 })
                 if (i + 1) % 10 == 0:
-                    self.event_log.add_event(f"  Completed {i+1}/{n} simulations")
+                    _log(f"  Completed {i+1}/{n} simulations")
             print_summary(db)
-            self.event_log.add_event(f"✅ Batch complete. See console for summary.")
+            _log("✅ Batch complete. See console for summary.")
 
         t = threading.Thread(target=_batch, daemon=True)
         t.start()
+
+    # ------------------------------------------------------------------
+    # Window close
+    # ------------------------------------------------------------------
+
+    def _on_close(self) -> None:
+        """
+        Handles window close: stops the simulation, flushes the
+        database writer queue, and destroys the Tk window.
+        """
+        from agents.base_agent import game_over, pause_event
+        from db.database import Database
+
+        # Unblock paused agents so threads can exit
+        pause_event.set()
+        game_over.set()
+
+        # Flush and close the database writer
+        try:
+            db = Database()
+            db.close()
+        except Exception:
+            pass
+
+        self.destroy()

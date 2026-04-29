@@ -5,16 +5,16 @@ Defines the common lifecycle of any world entity (human or zombie):
 starting the thread, executing update() every move_delay seconds and stopping
 when game_over is set or the agent dies.
 
+Design Patterns used:
+    - Template Method: run() defines the skeleton algorithm; subclasses
+      fill in update() and get_color().
+    - Signals: uses module-level threading.Event objects from signals.py.
+
 Responsibilities of this class:
     - Thread-safe unique ID generation for each agent.
     - run() loop: calls update(), sleeps move_delay and repeats.
-    - move_delay calculation based on age and force:
-        more age → slower; more force → faster.
+    - move_delay calculation based on age and force.
     - Valid states: calm | running | fighting | infected | dead.
-    - Global signals (threading.Event) accessible from any module:
-        · game_over      — stops all agents.
-        · antidote_ready — scientists have completed the antidote.
-        · national_alert — the politician has issued an emergency alert.
 
 Subclasses must implement:
     update()    — tick decision logic (movement, combat...).
@@ -28,16 +28,10 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Optional, TYPE_CHECKING
 
 import config
+from signals import game_over, antidote_ready, national_alert, pause_event
 
 if TYPE_CHECKING:
     from simulation.world import World
-
-# Global signals shared by the entire simulation
-game_over: threading.Event = threading.Event()
-antidote_ready: threading.Event = threading.Event()
-national_alert: threading.Event = threading.Event()
-pause_event: threading.Event = threading.Event()
-pause_event.set()
 
 # Atomic ID counter
 _id_lock = threading.Lock()
@@ -109,13 +103,17 @@ class Agent(threading.Thread, ABC):
         is set or the agent dies.
         """
         while not game_over.is_set() and self._alive:
-            pause_event.wait()
+            # Use timeout so we can re-check game_over even while paused
+            pause_event.wait(timeout=0.5)
+            if game_over.is_set() or not self._alive:
+                break
+            if not pause_event.is_set():
+                continue  # Still paused — loop back and wait again
             if self.state == "dead":
                 break
             try:
                 self.update()
             except Exception as exc:
-                # Prevent an error in one agent from crashing the main thread
                 print(f"[Agent {self.agent_id}] Error in update(): {exc}")
             time.sleep(self.move_delay)
         # Mark as inactive when exiting the loop (due to game_over or death)
@@ -165,19 +163,28 @@ class Agent(threading.Thread, ABC):
 
         Younger and stronger agents move faster.
 
+        Formula:
+            base = TICK_SPEED (0.1s)
+            age_factor: 1.0 for age ≤ 60, scales up to ~1.8 for age 100
+                        (elderly move up to 80% slower)
+            force_bonus: force/100 gives 0–1, mapped to 0.6–1.0 multiplier
+                         (strongest agents move 40% faster than weakest)
+            delay = base × age_factor × force_multiplier
+
         Returns:
             float: Wait seconds between ticks.
         """
-        # Age penalty
+        # Age penalty: gradual slowdown past threshold
         age_factor = 1.0
         if self.age > config.AGE_PENALTY_THRESHOLD:
-            age_factor = 1.0 + (self.age - config.AGE_PENALTY_THRESHOLD) * 0.02
+            overage = self.age - config.AGE_PENALTY_THRESHOLD
+            age_factor = 1.0 + overage * 0.02  # +2% per year over 60
 
-        # Force bonus
-        force_factor = 1.0 - (self.force / 200.0)  # up to 50% faster
+        # Force bonus: stronger = faster (linear from 1.0 at force=0 to 0.6 at force=100)
+        force_multiplier = 1.0 - (self.force / 100.0) * 0.4
 
-        delay = config.TICK_SPEED * age_factor * (0.5 + force_factor)
-        return max(0.05, delay)
+        delay = config.TICK_SPEED * age_factor * force_multiplier
+        return max(0.04, delay)
 
     # ------------------------------------------------------------------
     # Utility distance
@@ -200,6 +207,33 @@ class Agent(threading.Thread, ABC):
     # ------------------------------------------------------------------
     # Abstract methods that subclasses must implement
     # ------------------------------------------------------------------
+
+    def clone(self, **overrides) -> "Agent":
+        """
+        Prototype pattern: creates a shallow copy of the agent with overrides.
+
+        Builds a new agent of the same (or overridden) type, copying core
+        attributes and applying any keyword overrides.  The clone is NOT
+        started — callers must call .start() after placement.
+
+        This is used by Engine.convert_infected() so the expensive object
+        construction happens OUTSIDE the world lock, and only the brief
+        grid-swap (remove old + place new) needs the lock.
+
+        Args:
+            **overrides: Attribute overrides (pos, force, age, etc.).
+
+        Returns:
+            A new Agent instance (not yet started or placed).
+
+        References:
+            https://refactoring.guru/design-patterns/prototype
+        """
+        cls = overrides.pop("cls", self.__class__)
+        pos = overrides.pop("pos", self.pos)
+        force = overrides.pop("force", self.force)
+        age = overrides.pop("age", self.age)
+        return cls(pos=pos, world=self.world, force=force, age=age, **overrides)
 
     @abstractmethod
     def update(self) -> None:

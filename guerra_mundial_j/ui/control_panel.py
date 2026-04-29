@@ -172,7 +172,7 @@ class ControlPanel(tk.Frame):
                 "label": "Zombie Vision",
                 "key": "vision_zombie",
                 "from_": 5,
-                "to": 30,
+                "to": 50,
                 "resolution": 1,
                 "default": config.VISION_ZOMBIE,
                 "callback": self._on_vision_zombie_change,

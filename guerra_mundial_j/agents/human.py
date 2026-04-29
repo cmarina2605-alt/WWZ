@@ -24,7 +24,6 @@ Key mechanics:
 """
 
 import random
-import threading
 from typing import Tuple, Optional, TYPE_CHECKING
 
 import config
@@ -71,48 +70,165 @@ class Human(Agent):
         self.empathy: int = max(0, min(100, empathy))
         self.fear: int = max(0, min(100, fear))
         self.role: str = "normal"
+        # Survival attributes
+        self.food: float = float(config.INITIAL_FOOD)
+        self.water: float = float(config.INITIAL_WATER)
+        self._original_force: int = self.force  # Store base force before starvation
+        # Refuge (military base shelter) tracking
+        self.in_refuge: bool = False
+        self.refuge_ticks: int = 0          # How many ticks spent in refuge
+        self.refuge_cooldown: int = 0       # Cooldown before re-entry
 
     # ------------------------------------------------------------------
     # Main logic
     # ------------------------------------------------------------------
 
-    def update(self) -> None:
+    def update(self, _survival_done: bool = False) -> None:
         """
         Per-tick update logic for humans.
 
-        1. Detects nearby zombies and updates fear.
-        2. Calculates the next position (via movement).
-        3. Checks for zombie encounters at the new position.
-        4. Updates state based on context.
+        1. Updates refuge state (cooldown, eviction).
+        2. If sheltered in refuge, stays put (safe from zombies).
+        3. Detects nearby zombies and updates fear.
+        4. Calculates the next position (via movement).
+        5. Checks for zombie encounters at the new position.
+        6. Updates state based on context.
+
+        Args:
+            _survival_done: Internal flag set by subclasses (e.g. Scientist)
+                that already called _update_survival() to avoid double depletion.
         """
         from simulation import movement, combat
 
         if not self.is_alive():
             return
 
-        # Detect zombies within vision range
+        # --- Refuge cooldown ---
+        if self.refuge_cooldown > 0:
+            self.refuge_cooldown -= 1
+
+        # --- Refuge logic ---
+        dist_to_base = self.distance_to(config.MILITARY_BASE_POS)
+        if self.in_refuge:
+            self.refuge_ticks += 1
+            if self.refuge_ticks >= config.REFUGE_MAX_TICKS:
+                # Evicted! Time's up — make room for others
+                self.in_refuge = False
+                self.refuge_cooldown = config.REFUGE_COOLDOWN_TICKS
+                self.refuge_ticks = 0
+                self.world.push_event(
+                    "refuge",
+                    f"🚪 Human {self.agent_id} evicted from Fort Bragg refuge (time limit)",
+                )
+            else:
+                # Safe inside — reduce fear, resupply, skip movement
+                self.fear = max(0, self.fear - 10)
+                if self.state == "running":
+                    self.set_state("calm")
+                # Regenerate food/water while sheltered
+                self.food = min(config.INITIAL_FOOD, self.food + config.REFUGE_FOOD_REGEN)
+                self.water = min(config.INITIAL_WATER, self.water + config.REFUGE_WATER_REGEN)
+                if self.force < self._original_force:
+                    self.force = min(self._original_force, self.force + 1)
+                return
+        elif (
+            dist_to_base <= config.MILITARY_BASE_RADIUS
+            and self.refuge_cooldown == 0
+            and self.fear > 30
+        ):
+            # Enter refuge if near the base, scared, and not on cooldown
+            self.in_refuge = True
+            self.refuge_ticks = 0
+            self.fear = max(0, self.fear - 30)
+            self.world.push_event(
+                "refuge",
+                f"🏕 Human {self.agent_id} takes shelter at Fort Bragg",
+            )
+            return
+
+        # --- Survival: food & water ---
+        if not _survival_done:
+            self._update_survival()
+            if not self.is_alive():
+                return
+
+        # Single scan for nearby agents — reused for fear, movement, and combat
+        # This replaces 3-4 separate get_agents_in_radius calls per tick
         nearby = self.world.get_agents_in_radius(self.pos, config.VISION_HUMAN)
         zombies_nearby = [a for a in nearby if a.__class__.__name__ == "Zombie"]
 
         # Update fear
         self._update_fear(len(zombies_nearby))
 
-        # Calculate next position
-        next_pos = movement.calculate_next_pos(self, self.world)
+        # Panic propagation (uses already-fetched nearby list)
+        if self.state not in ("fighting", "dead", "infected"):
+            running_count = sum(1 for a in nearby if a.state == "running")
+            if running_count >= 4 and self.state == "calm":
+                self.set_state("running")
+                self.fear = min(100, self.fear + 20)
 
-        # Check if there is a zombie at the destination cell or adjacent
-        agents_at_dest = self.world.get_agents_in_radius(next_pos, 1)
-        zombies_at_dest = [a for a in agents_at_dest if a.__class__.__name__ == "Zombie"]
+        # Calculate next position (pass cached nearby to avoid re-scanning)
+        next_pos = movement.calculate_next_pos(self, self.world, nearby)
 
-        if zombies_at_dest:
-            zombie = zombies_at_dest[0]
-            combat.resolve_encounter(self, zombie, self.world)
+        # Check for zombie at the destination — use distance check instead
+        # of a second get_agents_in_radius call
+        zombie_at_dest = None
+        for z in zombies_nearby:
+            dx = z.pos[0] - next_pos[0]
+            dy = z.pos[1] - next_pos[1]
+            if dx * dx + dy * dy <= 2:  # within ~1.4 cells
+                zombie_at_dest = z
+                break
+
+        if zombie_at_dest:
+            combat.resolve_encounter(self, zombie_at_dest, self.world)
         else:
             # Move the agent
             self.world.move_agent(self, next_pos)
 
-        # Panic propagation
-        movement.panic_spread(self, self.world)
+    def _update_survival(self) -> None:
+        """
+        Updates food and water levels each tick.
+
+        When resources hit zero, the agent gradually loses force.
+        If force drops below DEATH_FORCE_THRESHOLD from starvation/
+        dehydration, the agent dies.
+
+        While in refuge, food and water regenerate instead.
+        """
+        # Consume resources
+        self.food = max(0.0, self.food - config.FOOD_DECAY_PER_TICK)
+        self.water = max(0.0, self.water - config.WATER_DECAY_PER_TICK)
+
+        # Starvation penalty
+        force_penalty = 0.0
+        if self.food <= config.STARVATION_THRESHOLD:
+            force_penalty += config.FORCE_LOSS_NO_FOOD
+        if self.water <= config.DEHYDRATION_THRESHOLD:
+            force_penalty += config.FORCE_LOSS_NO_WATER
+
+        if force_penalty > 0:
+            self.force = max(0, int(self.force - force_penalty))
+            # Recalculate speed (weaker = slower)
+            self.move_delay = self._calculate_move_delay()
+
+            if self.force <= config.DEATH_FORCE_THRESHOLD:
+                cause = []
+                if self.food <= 0:
+                    cause.append("starvation")
+                if self.water <= 0:
+                    cause.append("dehydration")
+                self.die()
+                self.world.push_event(
+                    "death",
+                    f"☠️ Human {self.agent_id} died of {' and '.join(cause)}",
+                )
+                # Observer pattern: notify EventBus
+                if self.world.event_bus:
+                    self.world.event_bus.publish("human_died", {
+                        "human_id": self.agent_id,
+                        "cause": " and ".join(cause),
+                    })
 
     def _update_fear(self, zombie_count: int) -> None:
         """
@@ -220,6 +336,11 @@ class Scientist(Human):
         if not self.is_alive():
             return
 
+        # Survival: food & water still deplete even for scientists
+        self._update_survival()
+        if not self.is_alive():
+            return
+
         # Detect if we are near the laboratory
         dist_to_lab = self.distance_to(config.LAB_POS)
         if dist_to_lab <= config.LAB_RADIUS:
@@ -231,7 +352,7 @@ class Scientist(Human):
 
         if zombies_nearby:
             self.in_lab = False  # Leave the lab if there is danger
-            super().update()
+            super().update(_survival_done=True)
         elif self.in_lab and not antidote_ready.is_set():
             self._work_on_antidote()
             self._update_fear(0)  # The scientist calms down while working
@@ -241,7 +362,7 @@ class Scientist(Human):
             next_pos = movement.move_towards(self.pos, config.LAB_POS, self.world)
             self.world.move_agent(self, next_pos)
         else:
-            super().update()
+            super().update(_survival_done=True)
 
     def _work_on_antidote(self) -> None:
         """
@@ -261,6 +382,9 @@ class Scientist(Human):
                 "antidote",
                 f"💉 ANTIDOTE COMPLETED! Scientist #{self.agent_id} has found the cure",
             )
+            # Observer pattern: notify EventBus for instant win detection
+            if self.world.event_bus:
+                self.world.event_bus.publish("antidote_complete", {"scientist_id": self.agent_id})
 
     def get_color(self) -> str:
         if self.state == "infected":
@@ -310,11 +434,22 @@ class Military(Human):
 
         With "military_first" strategy: expanded vision radius (VISION_ZOMBIE)
         and reduced strength threshold to 30, so almost all military units fight.
+
+        Military units resupply ammunition when near the military base.
         """
         from simulation import movement, combat
 
         if not self.is_alive():
             return
+
+        # Resupply ammo at military base
+        dist_to_base = self.distance_to(config.MILITARY_BASE_POS)
+        if dist_to_base <= config.MILITARY_BASE_RADIUS and self.ammo < 5:
+            self.ammo += config.MILITARY_AMMO_RESUPPLY
+            self.world.push_event(
+                "resupply",
+                f"🔄 Military {self.agent_id} resupplied at Fort Bragg (+{config.MILITARY_AMMO_RESUPPLY} ammo)",
+            )
 
         strategy = getattr(self.world, "strategy", "none")
         if strategy == "military_first":
@@ -339,8 +474,28 @@ class Military(Human):
             else:
                 self.world.move_agent(self, next_pos)
         else:
-            # Standard behavior (flee)
-            super().update()
+            # If a president exists and no immediate threat, move to protect them
+            president = self._find_president()
+            if president and self.distance_to(president.pos) > 3:
+                # Move toward the president to form a protective escort
+                next_pos = movement.move_towards(self.pos, president.pos, self.world)
+                self.world.move_agent(self, next_pos)
+            else:
+                # Standard behavior (flee or patrol near president)
+                super().update()
+
+    def _find_president(self):
+        """
+        Searches for the living president among nearby agents.
+
+        Returns:
+            The president Politician if found within extended vision, or None.
+        """
+        nearby = self.world.get_agents_in_radius(self.pos, config.VISION_ZOMBIE)  # Extended range
+        for a in nearby:
+            if isinstance(a, Politician) and getattr(a, "is_president", False) and a.is_alive():
+                return a
+        return None
 
     def use_ammo(self) -> bool:
         """
@@ -415,6 +570,7 @@ class Politician(Human):
         self.influence: int = max(0, min(100, influence))
         self.ideology: str = ideology if ideology in self.IDEOLOGY_STRATEGIES else random.choice(list(self.IDEOLOGY_STRATEGIES))
         self.alert_cooldown: int = 0
+        self.is_president: bool = False  # Set to True when chosen as president
         self._alert_messages: list[str] = [
             "📨 Message reaches the White House",
             "📨 National state of emergency declared",
@@ -459,4 +615,6 @@ class Politician(Human):
             return config.COLOR_INFECTED
         if self.state == "dead":
             return config.COLOR_DEAD
+        if self.is_president:
+            return config.COLOR_PRESIDENT
         return config.COLOR_POLITICIAN

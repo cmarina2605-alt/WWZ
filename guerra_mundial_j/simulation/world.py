@@ -25,7 +25,6 @@ do NOT need to do so except for compound operations requiring atomicity.
 """
 
 import threading
-import math
 from typing import Dict, List, Tuple, Optional, Any, TYPE_CHECKING
 
 import config
@@ -67,6 +66,9 @@ class World:
         tick (int): Global tick counter (incremented by Engine).
     """
 
+    # Class-level cache: avoids repeating ray-casting on every reset/batch run
+    _land_cache: Dict[int, frozenset] = {}
+
     def __init__(self, size: int = config.GRID_SIZE) -> None:
         """
         Initializes the world with an empty grid.
@@ -85,6 +87,10 @@ class World:
         self.strategy: str = "none"
         # Precomputed set of land cells — agents cannot enter ocean cells
         self.land_cells: frozenset = self._build_land_mask()
+        # EventBus reference — set by Engine after construction
+        self.event_bus: Optional[Any] = None
+        # CommandHistory reference — set by Engine after construction
+        self.command_history: Optional[Any] = None
 
     # ------------------------------------------------------------------
     # Grid operations
@@ -156,8 +162,9 @@ class World:
         """
         Returns all agents within a given radius.
 
-        Uses Euclidean distance. Does not include the agent at the
-        exact position of pos (if it is the one asking).
+        Uses squared Euclidean distance (avoids sqrt). Takes a fast
+        snapshot of the grid under the lock, then filters outside it
+        to minimize lock hold time.
 
         Args:
             pos: Search center (x, y).
@@ -166,28 +173,22 @@ class World:
         Returns:
             List of agents within the radius.
         """
+        # Quick copy under lock — O(n) but no computation
+        with self.lock:
+            grid_snapshot = list(self.grid.items())
+
+        # Filter outside lock — no contention with other threads
+        r_sq = radius * radius
+        px, py = pos
         results: List["Agent"] = []
-        with self.lock:
-            for (ax, ay), agent in self.grid.items():
-                dx = ax - pos[0]
-                dy = ay - pos[1]
-                dist = math.sqrt(dx * dx + dy * dy)
-                if dist <= radius and agent.pos != pos:
-                    results.append(agent)
+        for (ax, ay), agent in grid_snapshot:
+            if ax == px and ay == py:
+                continue  # Skip self
+            dx = ax - px
+            dy = ay - py
+            if dx * dx + dy * dy <= r_sq:
+                results.append(agent)
         return results
-
-    def get_agent_at(self, pos: Tuple[int, int]) -> Optional["Agent"]:
-        """
-        Returns the agent at an exact position, or None.
-
-        Args:
-            pos: Position (x, y) to query.
-
-        Returns:
-            Agent at that position or None.
-        """
-        with self.lock:
-            return self.grid.get(pos)
 
     def is_cell_free(self, pos: Tuple[int, int]) -> bool:
         """
@@ -202,19 +203,25 @@ class World:
         with self.lock:
             return pos not in self.grid
 
-    def is_land(self, pos: Tuple[int, int]) -> bool:
-        """Returns True if pos is a land cell (not ocean)."""
-        return pos in self.land_cells
-
     def find_free_cell(self) -> Optional[Tuple[int, int]]:
         """
         Finds a random free land cell in the grid.
+
+        Uses random sampling instead of shuffling the entire land_cells
+        set, which is much faster for sparse grids (300 agents on ~30k cells).
 
         Returns:
             Tuple (x, y) of a free land cell, or None if all are occupied.
         """
         import random
         land = list(self.land_cells)
+        # Try random sampling first (fast for sparse grids)
+        for _ in range(200):
+            pos = random.choice(land)
+            with self.lock:
+                if pos not in self.grid:
+                    return pos
+        # Fallback: exhaustive search if grid is very crowded
         random.shuffle(land)
         with self.lock:
             for pos in land:
@@ -230,23 +237,37 @@ class World:
         """
         Returns a copy of the current grid state for rendering.
 
-        The copy is made under the lock to guarantee consistency.
-        The result can be read without the lock once obtained.
+        Takes a fast snapshot of grid entries under the lock, then
+        builds the detailed info dicts outside the lock to minimize
+        contention with agent threads.
 
         Returns:
             Dict of {(x, y): {"type": str, "role": str, "state": str}}
         """
-        snapshot: Dict[Tuple[int, int], Dict[str, str]] = {}
+        # Quick copy under lock — just the position→agent references
         with self.lock:
-            for pos, agent in self.grid.items():
-                agent_type = agent.__class__.__name__
-                role = getattr(agent, "role", agent_type.lower())
-                snapshot[pos] = {
-                    "type": agent_type,
-                    "role": role,
-                    "state": agent.state,
-                    "color": agent.get_color(),
-                }
+            grid_copy = list(self.grid.items())
+
+        # Build detailed snapshot outside lock
+        snapshot: Dict[Tuple[int, int], Dict[str, str]] = {}
+        for pos, agent in grid_copy:
+            agent_type = agent.__class__.__name__
+            role = getattr(agent, "role", agent_type.lower())
+            info = {
+                "type": agent_type,
+                "role": role,
+                "state": agent.state,
+                "color": agent.get_color(),
+            }
+            # Include survival attributes if present
+            if hasattr(agent, "food"):
+                info["food"] = getattr(agent, "food", 100)
+                info["water"] = getattr(agent, "water", 100)
+            if hasattr(agent, "in_refuge"):
+                info["in_refuge"] = getattr(agent, "in_refuge", False)
+            if hasattr(agent, "is_president"):
+                info["is_president"] = getattr(agent, "is_president", False)
+            snapshot[pos] = info
         return snapshot
 
     # ------------------------------------------------------------------
@@ -305,32 +326,25 @@ class World:
         """
         Precomputes which grid cells fall inside the continental U.S. polygon.
 
-        Uses ray-casting on each integer cell center. Called once at init.
+        Uses ray-casting on each integer cell center. The result is cached
+        at the class level so batch runs and resets don't repeat the
+        expensive computation.
 
         Returns:
             frozenset of (x, y) tuples that are on land.
         """
+        if self.size in World._land_cache:
+            return World._land_cache[self.size]
+
         land = set()
         polygon = config.USA_POLYGON
         for x in range(self.size):
             for y in range(self.size):
                 if _point_in_polygon(x, y, polygon):
                     land.add((x, y))
-        return frozenset(land)
-
-    def count_agents_by_type(self) -> Dict[str, int]:
-        """
-        Counts agents by type (Zombie, Human, etc.).
-
-        Returns:
-            Dict of {type: count}.
-        """
-        counts: Dict[str, int] = {}
-        with self.lock:
-            for agent in self.grid.values():
-                t = agent.__class__.__name__
-                counts[t] = counts.get(t, 0) + 1
-        return counts
+        result = frozenset(land)
+        World._land_cache[self.size] = result
+        return result
 
     def __repr__(self) -> str:
         return f"World(size={self.size}, agents={len(self.grid)})"

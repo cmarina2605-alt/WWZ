@@ -42,6 +42,8 @@ class StatsPanel(tk.Frame):
         ("tick",      "⏱  Tick",      "#87ceeb"),
         ("phase",     "📍 Phase",     "#ff9944"),
         ("strategy",  "⚙  Protocol", "#da70d6"),
+        ("avg_food",  "🍖 Avg Food",  "#ff8844"),
+        ("avg_water", "💧 Avg Water", "#4488ff"),
         ("result",    "🏁 Status",    "#ffffff"),
     ]
 
