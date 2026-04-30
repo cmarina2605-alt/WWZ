@@ -55,17 +55,11 @@ class GridCanvas(tk.Canvas):
     # Map geometry
     # ------------------------------------------------------------------
 
-    USA_POLYGON = config.USA_POLYGON
-
-    # Approximate state division lines (dashed strokes) — scaled to 250×250
-    STATE_REGION_LINES = [
-        [(38, 8), (36, 30), (35, 60), (35, 100), (35, 140), (35, 180), (35, 195)],
-        [(70, 5), (68, 30), (67, 60), (67, 100), (67, 140), (68, 180), (72, 210)],
-        [(108, 5), (106, 30), (105, 60), (105, 100), (106, 140), (108, 180), (108, 210)],
-        [(165, 8), (168, 30), (170, 60), (172, 80), (175, 100), (180, 120), (185, 140)],
-        [(35, 140), (70, 142), (108, 145), (140, 148), (170, 150), (200, 140)],
-        [(35, 60), (70, 58), (108, 56), (140, 55), (165, 54)],
-    ]
+    # USA_POLYGON and state-divide lines are read from config in __init__,
+    # *not* captured here as class attributes. Class-attribute assignment
+    # would freeze the value at class-definition time, which happens during
+    # the import of ui.app — i.e. before main.py's apply_map_version() call
+    # can switch to v1. Reading per-instance keeps versioning honest.
 
     # Key cities / zones
     CITY_MARKERS = [
@@ -132,11 +126,15 @@ class GridCanvas(tk.Canvas):
     # ------------------------------------------------------------------
 
     def _draw_usa_background(self) -> None:
-        """Draws the continental U.S. polygon with state division lines."""
+        """Draws the continental U.S. polygon with state division lines.
+
+        Polygon and state-divide lines are pulled from config at draw time so
+        the active --map-version (v1 or v2) selects which set is rendered.
+        """
         cs = self.cell_size
 
         pts = []
-        for gx, gy in self.USA_POLYGON:
+        for gx, gy in config.USA_POLYGON:
             pts.extend([gx * cs, gy * cs])
         self.create_polygon(
             pts,
@@ -145,8 +143,10 @@ class GridCanvas(tk.Canvas):
             width=1.5,
         )
 
-        # Draw approximate state division lines for visual context
-        for line in self.STATE_REGION_LINES:
+        # Draw state-divide lines (decorative dashed strokes). Source list
+        # is version-dependent — v1 uses abstract dashes, v2 uses real
+        # rivers/ranges/borders (Mississippi, Rockies, Appalachians, etc.).
+        for line in config.STATE_LINES:
             pts = []
             for gx, gy in line:
                 pts.extend([gx * cs, gy * cs])
@@ -160,10 +160,18 @@ class GridCanvas(tk.Canvas):
                 )
 
     def _draw_zones(self) -> None:
-        """Draws key city markers with name and label."""
+        """Draws key city markers with name and label.
+
+        Two passes:
+          1. Strategic cities (CITY_MARKERS) — large, with halo rings, two-line
+             labels. These are referenced by the simulation logic.
+          2. Context cities (config.CONTEXT_CITIES) — smaller gray markers,
+             single-line labels. Decorative only; v2 ships eight, v1 zero.
+        """
         cs = self.cell_size
         r = max(8, config.LAB_RADIUS * cs)
 
+        # Pass 1: strategic cities with halo rings
         for attr, line1, line2, color in self.CITY_MARKERS:
             gx, gy = getattr(config, attr)
             px, py = gx * cs, gy * cs
@@ -188,6 +196,22 @@ class GridCanvas(tk.Canvas):
             self.create_text(
                 px, py - r - 2,
                 text=line2, fill=color,
+                font=("Consolas", 7),
+            )
+
+        # Pass 2: context cities (decorative)
+        for city in config.CONTEXT_CITIES:
+            gx, gy = city["pos"]
+            px, py = gx * cs, gy * cs
+            color = city.get("color", "#9aa6b3")
+
+            self.create_oval(
+                px - 2, py - 2, px + 2, py + 2,
+                fill=color, outline="#000000", width=0.5,
+            )
+            self.create_text(
+                px, py - 8,
+                text=city["name"], fill=color,
                 font=("Consolas", 7),
             )
 
