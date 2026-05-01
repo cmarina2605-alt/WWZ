@@ -12,6 +12,8 @@ build/
 
 # Base de datos
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 
 # Entornos virtuales
@@ -34,3 +36,10 @@ env/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Office lock files
+~$*
+
+# Generated report
+Guerra_Mundial_J_Report.docx
+Guerra_Mundial_J_Report.pdf
