@@ -21,6 +21,9 @@ Available arguments:
     --p-infect FLOAT     Infection probability in encounters (0.0–1.0).
     --humans INT         Number of humans at the start of the simulation.
     --stats              Display statistical summary from the DB and exit.
+    --map-version STR    Map version: v1 (original hand-drawn) | v2 (lat/lon-projected,
+                         default). v1 reads/writes simulations_v1.db; v2 uses
+                         simulations.db. Use v1 to reproduce historical seeds.
 
 Examples:
     python main.py
@@ -28,6 +31,7 @@ Examples:
     python main.py --seed 12345
     python main.py --no-ui --seed 42 --strategy military_first
     python main.py --stats
+    python main.py --map-version v1 --seed 42       # reproduce a historical run
 """
 
 import argparse
@@ -101,6 +105,18 @@ Examples:
         action="store_true",
         default=False,
         help="Display statistical summary of previous simulations and exit.",
+    )
+    parser.add_argument(
+        "--map-version",
+        type=str,
+        default="v2",
+        choices=list(config.MAP_DATA.keys()),
+        help=(
+            "Map version. v2 (default) uses the lat/lon-projected polygon "
+            "and writes to simulations.db. v1 uses the original hand-drawn "
+            "polygon and reads/writes simulations_v1.db; use it to reproduce "
+            "historical --seed N runs."
+        ),
     )
 
     return parser.parse_args()
@@ -208,6 +224,12 @@ def main() -> None:
     Main function: parses arguments and launches the corresponding mode.
     """
     args = parse_args()
+
+    # Apply map version FIRST — must happen before any World/Engine is created,
+    # before --stats opens a Database (DB_PATH is version-dependent), and
+    # before any UI module that reads polygon/city positions is imported.
+    config.apply_map_version(args.map_version)
+    print(f"[Map] Using map version {config.MAP_VERSION} → {config.DB_PATH}")
 
     # Statistics mode
     if args.stats:
