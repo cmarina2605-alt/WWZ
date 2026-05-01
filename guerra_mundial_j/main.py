@@ -177,7 +177,7 @@ def run_batch(
 
         print(
             f"  [{i+1:>4}/{n}] seed={stats['seed']:<8} "
-            f"result={stats.get('result','?'):<12} "
+            f"result={(stats.get('result') or 'timeout'):<12} "
             f"ticks={stats['tick']:<6} "
             f"duration={stats['duration']:.1f}s"
         )

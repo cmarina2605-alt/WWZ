@@ -9,18 +9,13 @@ Implements the hierarchy of humans that populate the grid:
     │                  work on the antidote; flees if zombies are detected nearby.
     ├── Military     — if force > FORCE_FLEE_THRESHOLD, chases zombies instead
     │                  of fleeing; uses ammo to increase kill probability.
-    └── Politician   — emits national alerts (national_alert) when seeing zombies,
-                       which speeds up the military response.
+    └── Politician   — emits national alerts (national_alert) when seeing zombies, which speeds up the military response.
 
 Key mechanics:
-    - Fear: increases when zombies are seen, decreases over time.
-      High fear activates the "running" state and can penalize attributes.
-    - Social panic (panic_spread): if ≥4 neighbors are running, the agent
-      enters panic even without directly seeing zombies.
-    - Infection: Human.infect() marks the state as "infected"; the actual
-      conversion to Zombie is managed by the Engine's InfectionMonitor.
-    - Antidote: when a Scientist accumulates enough ticks in the lab,
-      it activates antidote_ready and pushes an event to the EventLog.
+    - Fear: increases when zombies are seen, decreases over time. High fear activates the "running" state and can penalize attributes.
+    - Social panic (panic_spread): if ≥4 neighbors are running, the agent enters panic even without directly seeing zombies.
+    - Infection: Human.infect() marks the state as "infected"; the actual conversion to Zombie is managed by the Engine's InfectionMonitor.
+    - Antidote: when a Scientist accumulates enough ticks in the lab, it activates antidote_ready and pushes an event to the EventLog.
 """
 
 import random
